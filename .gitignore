@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+.env
+*.egg
+.pytest_cache/
+.mypy_cache/
+
+benchmark_scripts/mg_run_benchmark.py
+
+# Bulky regeneratable outputs — per-model gzipped TSVs ARE committed
+# (results/{benchmark}/{pregrouper}/*.tsv.gz). Anything else under
+# results/ is regeneratable from those + the postprocess scripts.
+results/**/*.tsv
+!results/f_table.tsv

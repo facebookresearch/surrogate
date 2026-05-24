@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "surrogate"
+version = "0.1.0"
+description = "Interpretability research tools for surrogate model analysis"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+dependencies = [
+    "torch>=2.0",
+    "transformers>=4.30",
+    "accelerate>=0.20",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "tqdm>=4.60",
+    "datasets>=2.14",
+    "huggingface-hub>=0.16",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["surrogate*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
