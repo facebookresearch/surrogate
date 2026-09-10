@@ -1,0 +1,68 @@
+{
+  "artifact_sha256": {
+    "segment": "7c343b9efadce8d8792ccbb9cde66184caede75e28de3f807e15bbf029dee313"
+  },
+  "availability_status": "unsupported_after_canary",
+  "benchmark": "lambada",
+  "canary": {
+    "ablated_coverage": 0.06439854191980558,
+    "artifact_path": "gpt-4o_canary.json",
+    "artifact_sha256": "2160e582c54509e92838e84395709ae1bf6e9161f0cf4f7612d3da3cac5914c2",
+    "expected_segments": 823,
+    "original_coverage": 0.1,
+    "paired_attribution_coverage": 0.04738760631834751,
+    "prompt_indices": [
+      442,
+      459,
+      485,
+      1037,
+      2229,
+      2258,
+      3368,
+      3592,
+      3982,
+      4420
+    ],
+    "sample_size": 10,
+    "seed": 42,
+    "selection": "numpy_default_rng_choice_without_replacement_sorted_from_5153_frozen_rows"
+  },
+  "identity_attestation": "Hosted prompt and ablation coordinates were verified against the canonical public segment manifest.",
+  "manifest_sha256": "63a99399ec879abcaa66cb389a7840ff68b836373f8a4ac52bb3d6fdf1aa74be",
+  "model": "gpt-4o",
+  "pregrouper": "word",
+  "producer": {
+    "generated_at": "2026-09-09T02:26:30-07:00",
+    "producer_revision": "42bcbee9679b916f00f0f4adc81917799fd12fe2f012883bbd75d11c8be9c9c0",
+    "request_parameters": {
+      "echo": true,
+      "max_tokens": 0,
+      "max_transient_attempts": 5,
+      "scoring": "teacher_forced_echo_target_logprob_sum",
+      "top_logprobs": 20
+    },
+    "served_model": "gpt-4o"
+  },
+  "producer_audit_receipt": {
+    "entry_id": "lambada/word/gpt-4o",
+    "path": "hosted_completion_audit_receipt.json",
+    "sha256": "69d02b4b13318ee185b57b7287ea26ff87ccffdd8b1f66a7979717f0f1ab1888"
+  },
+  "schema_version": 1,
+  "segmentation_scope": "full_dialog_in_message_order",
+  "segments": 10000,
+  "source_format": "unsupported_completion_placeholder_after_canary",
+  "source_sha256": "89ecf9078df36c7beea46dbc61c42cf593f56e57c62b505ea7604bc0d572be4f",
+  "source_size_bytes": 12547,
+  "transformation_source_sha256": {
+    "benchmark_scripts/benchmark_config.py": "2eab350439b48525eaf0f5b710856a494af61af2c89e1286ed9029514eb64dfb",
+    "benchmark_scripts/dialog_identity.py": "c259193fea2cd45a079b9c0ea1ff1f4b5ed6a030a965b7c43ee738551b306939",
+    "benchmark_scripts/hosted_audit_receipt.py": "08bd899c6e594e8d055cec247898361a16905a2c263f74219e2912d90852d04f",
+    "benchmark_scripts/hosted_completion.py": "b87a8e391f7532157a45b3c42c411f97f8ee2c349fb30b98b01756d091df4213",
+    "benchmark_scripts/hosted_completion_audit_receipt.py": "c0cf3091ce96f495bef093b3d386b2b0852fca288f4d94b18fe936337fb45dcc",
+    "benchmark_scripts/import_hosted_results.py": "ff29713e0d6f9688a0fea70ce7e75be31b5a4a52ee4467a0973a9cc1c59709d1",
+    "benchmark_scripts/provenance_sources.py": "db9b3469255d2c4724b94bc37d0b46e635f92101924a9de77c6c2c1ae2483e77",
+    "benchmark_scripts/record_hosted_provenance.py": "70b1c2347002fd3d96792b5b150eb263e2df21fb23bf82dc81744f339eba0e18",
+    "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6"
+  }
+}

@@ -1,0 +1,228 @@
+{
+  "benchmark": "boolq",
+  "models": {
+    "qwen2.5-0.5b-instruct": {
+      "gold_execution_source_sha256": {
+        "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
+        "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
+        "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+        "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+      },
+      "gold_segment_sha256": "01733d154a97346a2008ef68d210a4843602c05e2b96dd6677bf9a8276aaeccb",
+      "matched_rows": 10000,
+      "metrics": {
+        "attention_max": {
+          "max_abs_error": 0.0,
+          "pearson_r": 1.0
+        },
+        "attention_mean": {
+          "max_abs_error": 0.0,
+          "pearson_r": 1.0
+        },
+        "attention_rollout": {
+          "max_abs_error": 5.293955920339377e-23,
+          "pearson_r": 1.0
+        }
+      },
+      "replay_dataset": {
+        "hf_name": "boolq",
+        "hf_path": "aps/super_glue",
+        "hf_split": "validation",
+        "normalized_frame_sha256": "8ef3b29d17186097b1857dcb6552f404b24157b7edd670d0eaa0121245167a0b",
+        "rows": 3270,
+        "snapshot_filename": "google_boolq_validation.tsv",
+        "snapshot_sha256": "80040aa10f18e5b01082386dae3bdde48931a0311e807f6cb10f7173995f346a"
+      },
+      "replay_execution_source_sha256": {
+        "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
+        "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
+        "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+        "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+      },
+      "replay_manifest_sha256": "ffc97bf4a3316e834eb30f4023f87c63789a040ccb1ee04711288f3963eda882",
+      "replay_prompts": 3270,
+      "replay_rows": 476154,
+      "replay_segment_sha256": "806808cba4b41e7c3c90b1db69bdf5f7d6ea99412a4e69d5861a9ebddae56995",
+      "source_differences": []
+    },
+    "qwen2.5-14b-instruct": {
+      "gold_execution_source_sha256": {
+        "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
+        "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
+        "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+        "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+      },
+      "gold_segment_sha256": "345e724f697fd444da3bf8920bc9e967b33588b442c28e6f18de1b6cc38d55b2",
+      "matched_rows": 10000,
+      "metrics": {
+        "attention_max": {
+          "max_abs_error": 0.0,
+          "pearson_r": 1.0
+        },
+        "attention_mean": {
+          "max_abs_error": 0.0,
+          "pearson_r": 0.9999999999999999
+        },
+        "attention_rollout": {
+          "max_abs_error": 4.1359030627651384e-25,
+          "pearson_r": 1.0
+        }
+      },
+      "replay_dataset": {
+        "hf_name": "boolq",
+        "hf_path": "aps/super_glue",
+        "hf_split": "validation",
+        "normalized_frame_sha256": "8ef3b29d17186097b1857dcb6552f404b24157b7edd670d0eaa0121245167a0b",
+        "rows": 3270,
+        "snapshot_filename": "google_boolq_validation.tsv",
+        "snapshot_sha256": "80040aa10f18e5b01082386dae3bdde48931a0311e807f6cb10f7173995f346a"
+      },
+      "replay_execution_source_sha256": {
+        "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
+        "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
+        "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+        "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+      },
+      "replay_manifest_sha256": "ffc97bf4a3316e834eb30f4023f87c63789a040ccb1ee04711288f3963eda882",
+      "replay_prompts": 3270,
+      "replay_rows": 476154,
+      "replay_segment_sha256": "8ebe2038e54d2276ebba514277baa1e3881533336d7d42cfc5b3bb94bae2bf26",
+      "source_differences": []
+    },
+    "qwen2.5-3b-instruct": {
+      "gold_execution_source_sha256": {
+        "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
+        "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
+        "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+        "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+      },
+      "gold_segment_sha256": "328a2187470584c2d4524141ed4e75f39cf87482dab0df03142a1b98bbcc5eed",
+      "matched_rows": 10000,
+      "metrics": {
+        "attention_max": {
+          "max_abs_error": 0.0,
+          "pearson_r": 0.9999999999999999
+        },
+        "attention_mean": {
+          "max_abs_error": 0.0,
+          "pearson_r": 1.0
+        },
+        "attention_rollout": {
+          "max_abs_error": 5.293955920339377e-23,
+          "pearson_r": 1.0
+        }
+      },
+      "replay_dataset": {
+        "hf_name": "boolq",
+        "hf_path": "aps/super_glue",
+        "hf_split": "validation",
+        "normalized_frame_sha256": "8ef3b29d17186097b1857dcb6552f404b24157b7edd670d0eaa0121245167a0b",
+        "rows": 3270,
+        "snapshot_filename": "google_boolq_validation.tsv",
+        "snapshot_sha256": "80040aa10f18e5b01082386dae3bdde48931a0311e807f6cb10f7173995f346a"
+      },
+      "replay_execution_source_sha256": {
+        "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
+        "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
+        "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+        "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+      },
+      "replay_manifest_sha256": "ffc97bf4a3316e834eb30f4023f87c63789a040ccb1ee04711288f3963eda882",
+      "replay_prompts": 3270,
+      "replay_rows": 476154,
+      "replay_segment_sha256": "9944746fc20f5f003c6de1c28007d8939d4f9642001aaf1f21490d76f7a649bb",
+      "source_differences": []
+    },
+    "qwen2.5-7b-instruct": {
+      "gold_execution_source_sha256": {
+        "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
+        "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
+        "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+        "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+      },
+      "gold_segment_sha256": "8ed8d4b2f626238980a35c37078dc1f30c223dd3f50ae967bb0a0a9a004f9980",
+      "matched_rows": 10000,
+      "metrics": {
+        "attention_max": {
+          "max_abs_error": 0.0,
+          "pearson_r": 0.9999999999999998
+        },
+        "attention_mean": {
+          "max_abs_error": 0.0,
+          "pearson_r": 1.0
+        },
+        "attention_rollout": {
+          "max_abs_error": 5.293955920339377e-23,
+          "pearson_r": 1.0
+        }
+      },
+      "replay_dataset": {
+        "hf_name": "boolq",
+        "hf_path": "aps/super_glue",
+        "hf_split": "validation",
+        "normalized_frame_sha256": "8ef3b29d17186097b1857dcb6552f404b24157b7edd670d0eaa0121245167a0b",
+        "rows": 3270,
+        "snapshot_filename": "google_boolq_validation.tsv",
+        "snapshot_sha256": "80040aa10f18e5b01082386dae3bdde48931a0311e807f6cb10f7173995f346a"
+      },
+      "replay_execution_source_sha256": {
+        "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
+        "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
+        "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+        "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+      },
+      "replay_manifest_sha256": "ffc97bf4a3316e834eb30f4023f87c63789a040ccb1ee04711288f3963eda882",
+      "replay_prompts": 3270,
+      "replay_rows": 476154,
+      "replay_segment_sha256": "dd73c06ce77597ea59029de745f0642d6f53ddd17657bea20376f88713e1698e",
+      "source_differences": []
+    }
+  },
+  "pregrouper": "word",
+  "purpose": "Separate uncapped full-corpus execution of corrected Qwen word attention after identifying sentence-attention contamination in the archive; comparisons use the fixed release coordinates.",
+  "replay_completed_epoch": 1789046106,
+  "replay_started_epoch": 1789042736,
+  "schema_version": 1,
+  "source_files": {
+    "benchmark_scripts/benchmark_config.py": {
+      "mtime_ns": 1788920486876027227,
+      "sha256": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa"
+    },
+    "benchmark_scripts/run_benchmark.py": {
+      "mtime_ns": 1788994713590294785,
+      "sha256": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987"
+    },
+    "surrogate/attention_scoring.py": {
+      "mtime_ns": 1788919135267444737,
+      "sha256": "a8f6a8cce01767e4839b0c3684f58481bd1c434acf71707a33814321eaa4b538"
+    },
+    "surrogate/eval_constants.py": {
+      "mtime_ns": 1788919287757655383,
+      "sha256": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6"
+    },
+    "surrogate/model_types.py": {
+      "mtime_ns": 1788916815967024258,
+      "sha256": "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd"
+    },
+    "surrogate/representation_scoring.py": {
+      "mtime_ns": 1788916815967024258,
+      "sha256": "c574c6cfaa5c9d3b6380129d019ef259f06f19ccb0f01c07def1a60abc391b0c"
+    },
+    "surrogate/text_augmentation.py": {
+      "mtime_ns": 1788919135267444737,
+      "sha256": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16"
+    },
+    "surrogate/transformers_model.py": {
+      "mtime_ns": 1788916815967024258,
+      "sha256": "b9fd08fe2ba2f0dbc4dd41b468c9875dfcac2c62373ccadeef1837409dbf10f9"
+    },
+    "surrogate/transformers_scoring.py": {
+      "mtime_ns": 1788916815967024258,
+      "sha256": "18a894fd3f0153152162ee7ee4b028f1a673e62468b1a00762ddf8033f71e35e"
+    },
+    "surrogate/utils.py": {
+      "mtime_ns": 1788923550644222952,
+      "sha256": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+    }
+  }
+}

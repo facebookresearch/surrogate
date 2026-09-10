@@ -1,0 +1,256 @@
+{
+  "archive_provenance": {
+    "audited_claim_set_sha256": "07b39fa99ba62247e231569806c2cb74a96d209d5a3f226c81e92016a9053831",
+    "enforced": true,
+    "historical_claims_sha256": "ac6fd0b788d3c749eef94652b9a8ca68894106597d27c325c07ecbdbc8a56577",
+    "kind": "raw_archive_snapshot_bytes",
+    "sanitized_checks_sha256": "ec6af91ec01f323598b88691ecb8c1a09d6992486b235a19b4d11e581d76a2b4",
+    "sanitized_ledger_sha256": "1f090aaeb9f069e0e69c6e59e6d873411ad4a9945dba3902147f57ae5d896bab",
+    "trusted_race_raw_sha256": {
+      "archive/race_raw/gemini-2-5-flash-lite-vertex.json": "03d632fa4c6cc2b70dfae455673f9b2c0aa469e78db189cd1040d5231d7b5800",
+      "archive/race_raw/gpt-4-1.json": "8d64d83c7db3dc9551eb90c093228f9e518d41e1248a0f9a80bbf92e86079258",
+      "archive/race_raw/gpt-4o.json": "5e677c5b6f240cf18d1fd0e3d1c120be5a5a79fe52d56467a503e5e67396d281",
+      "archive/race_raw/llama-3.1-8b-instruct.json": "49c8ae9c3493ab23e6d5c5b914f6f0c25ced8409ccb684fda428bc411628913e",
+      "archive/race_raw/llama3.1-70b-instruct.json": "427406414256f94c90af1a973dcf1ad75258ac895e1e55a189a126b900054d3e",
+      "archive/race_raw/llama3.3-70b-instruct.json": "653718b1bcb720c98c544fc27c3cc7553abeed24f09a3fe2a5f6c6a2e6eb17d7",
+      "archive/race_raw/llama4-maverick-17b-128e-instruct.json": "be1727b16ed1add1bb7f0804a44bc4334df5cdc1159ba91e807950d95e801c93",
+      "archive/race_raw/qwen2.5-0.5b-instruct.json": "58225ee9d957b250346571abe2f740d28f09cd245fbd0efe171f5f6f202dd13b",
+      "archive/race_raw/qwen2.5-14b-instruct.json": "f5af4df813872b9e2a19dc6e6ababf3e033809847f046001c77ae5a2839e6cd6",
+      "archive/race_raw/qwen2.5-3b-instruct.json": "31251ed54d0b199ab288eb63248ab74d821ed7df2f378b48d7fc8a200c061078",
+      "archive/race_raw/qwen2.5-7b-instruct.json": "9146b28e9a778a2908f39a538570200ebe95776552b7e8b25893b44fe4732fc8"
+    },
+    "trusted_race_raw_size_bytes": {
+      "archive/race_raw/gemini-2-5-flash-lite-vertex.json": 21403308,
+      "archive/race_raw/gpt-4-1.json": 16296520,
+      "archive/race_raw/gpt-4o.json": 20143058,
+      "archive/race_raw/llama-3.1-8b-instruct.json": 75772209,
+      "archive/race_raw/llama3.1-70b-instruct.json": 21363791,
+      "archive/race_raw/llama3.3-70b-instruct.json": 17208477,
+      "archive/race_raw/llama4-maverick-17b-128e-instruct.json": 17525205,
+      "archive/race_raw/qwen2.5-0.5b-instruct.json": 75799808,
+      "archive/race_raw/qwen2.5-14b-instruct.json": 73280526,
+      "archive/race_raw/qwen2.5-3b-instruct.json": 74899641,
+      "archive/race_raw/qwen2.5-7b-instruct.json": 74299515
+    },
+    "trusted_sha256": {
+      "archive/anli_r1_sentence_consolidated.tsv": "d6ef0c4d6c42e35e89001a1c37709a8345046bf85412ce2c17521763ec01f66a",
+      "archive/anli_r2_sentence_consolidated.tsv": "52af1f482e5d687d9019a8b61a457f023cf75ff223665925d40c4e8c9c8f8aa5",
+      "archive/anli_r3_sentence_consolidated.tsv": "0a84501fe564613fa3cb99e77f8688daacefca2fdef158c813fac8c9da05a494",
+      "archive/boolq_sentence_consolidated.tsv": "1309dcb70d961e394f9a832dc3ce05ccd85c0d81bdf3a303b9ede1dd5cfcd10b",
+      "archive/boolq_word_consolidated.tsv": "8d187bb42a00a16dfb4765ff68fee58a87ed2313eccdfaefd743cba4867c9e46",
+      "archive/lambada_word_consolidated.tsv": "d802a4bc33c5438abdd01d615ea0e06b7d44300f31bad59e006f99c6c71cbec2",
+      "archive/race_sentence_consolidated.tsv": "e36899afe20559f00fef530a623e4496fe9d14ab156eb364a0bed86f64cab77a",
+      "archive/reconciliation_models.json": "d9d4036452f0ed382d64f320d0a806c23fbdfd7bcf4cc9c50e1941f5fdbc5d8c",
+      "archive/winogrande_sentence_consolidated.tsv": "09fa9d8268f684c68ff75993afad6fd9fb04317df21121549722fc24670d817d"
+    },
+    "trusted_size_bytes": {
+      "archive/anli_r1_sentence_consolidated.tsv": 15741412,
+      "archive/anli_r2_sentence_consolidated.tsv": 15767909,
+      "archive/anli_r3_sentence_consolidated.tsv": 19242932,
+      "archive/boolq_sentence_consolidated.tsv": 64458815,
+      "archive/boolq_word_consolidated.tsv": 18355541,
+      "archive/lambada_word_consolidated.tsv": 15582147,
+      "archive/race_sentence_consolidated.tsv": 429766274,
+      "archive/reconciliation_models.json": 944,
+      "archive/winogrande_sentence_consolidated.tsv": 13244509
+    }
+  },
+  "artifact_type": "result_reconciliation",
+  "boolq_word_attention_caveat": "The historical BoolQ-word Qwen attention columns are sentence-level values joined onto the word grid by integer segment index; this row reproduces that archived computation but is not a valid word-level attention estimand.",
+  "generator": {
+    "locator": "benchmark_scripts/reconcile_results.py",
+    "sha256": "cff388be6fb33600bf9a61b010f273d7200b188e85ccd3e096d27af8399135d2"
+  },
+  "historical_estimand": {
+    "anli_declared_contrast": "entailment_contradiction",
+    "anli_executed_contrast": "entailment_neutral",
+    "missingness_policy": "pairwise_drop_nonfinite",
+    "prediction_scope": "not_applicable",
+    "segment_level_declared_scope": "user",
+    "segment_level_executed_scope": "all",
+    "statistic": "pearson_r2"
+  },
+  "inputs": {
+    "archive/anli_r1_sentence_consolidated.tsv": {
+      "sha256": "d6ef0c4d6c42e35e89001a1c37709a8345046bf85412ce2c17521763ec01f66a",
+      "size_bytes": 15741412
+    },
+    "archive/anli_r2_sentence_consolidated.tsv": {
+      "sha256": "52af1f482e5d687d9019a8b61a457f023cf75ff223665925d40c4e8c9c8f8aa5",
+      "size_bytes": 15767909
+    },
+    "archive/anli_r3_sentence_consolidated.tsv": {
+      "sha256": "0a84501fe564613fa3cb99e77f8688daacefca2fdef158c813fac8c9da05a494",
+      "size_bytes": 19242932
+    },
+    "archive/boolq_sentence_consolidated.tsv": {
+      "sha256": "1309dcb70d961e394f9a832dc3ce05ccd85c0d81bdf3a303b9ede1dd5cfcd10b",
+      "size_bytes": 64458815
+    },
+    "archive/boolq_word_consolidated.tsv": {
+      "sha256": "8d187bb42a00a16dfb4765ff68fee58a87ed2313eccdfaefd743cba4867c9e46",
+      "size_bytes": 18355541
+    },
+    "archive/lambada_word_consolidated.tsv": {
+      "sha256": "d802a4bc33c5438abdd01d615ea0e06b7d44300f31bad59e006f99c6c71cbec2",
+      "size_bytes": 15582147
+    },
+    "archive/race_raw/gemini-2-5-flash-lite-vertex.json": {
+      "sha256": "03d632fa4c6cc2b70dfae455673f9b2c0aa469e78db189cd1040d5231d7b5800",
+      "size_bytes": 21403308
+    },
+    "archive/race_raw/gpt-4-1.json": {
+      "sha256": "8d64d83c7db3dc9551eb90c093228f9e518d41e1248a0f9a80bbf92e86079258",
+      "size_bytes": 16296520
+    },
+    "archive/race_raw/gpt-4o.json": {
+      "sha256": "5e677c5b6f240cf18d1fd0e3d1c120be5a5a79fe52d56467a503e5e67396d281",
+      "size_bytes": 20143058
+    },
+    "archive/race_raw/llama-3.1-8b-instruct.json": {
+      "sha256": "49c8ae9c3493ab23e6d5c5b914f6f0c25ced8409ccb684fda428bc411628913e",
+      "size_bytes": 75772209
+    },
+    "archive/race_raw/llama3.1-70b-instruct.json": {
+      "sha256": "427406414256f94c90af1a973dcf1ad75258ac895e1e55a189a126b900054d3e",
+      "size_bytes": 21363791
+    },
+    "archive/race_raw/llama3.3-70b-instruct.json": {
+      "sha256": "653718b1bcb720c98c544fc27c3cc7553abeed24f09a3fe2a5f6c6a2e6eb17d7",
+      "size_bytes": 17208477
+    },
+    "archive/race_raw/llama4-maverick-17b-128e-instruct.json": {
+      "sha256": "be1727b16ed1add1bb7f0804a44bc4334df5cdc1159ba91e807950d95e801c93",
+      "size_bytes": 17525205
+    },
+    "archive/race_raw/qwen2.5-0.5b-instruct.json": {
+      "sha256": "58225ee9d957b250346571abe2f740d28f09cd245fbd0efe171f5f6f202dd13b",
+      "size_bytes": 75799808
+    },
+    "archive/race_raw/qwen2.5-14b-instruct.json": {
+      "sha256": "f5af4df813872b9e2a19dc6e6ababf3e033809847f046001c77ae5a2839e6cd6",
+      "size_bytes": 73280526
+    },
+    "archive/race_raw/qwen2.5-3b-instruct.json": {
+      "sha256": "31251ed54d0b199ab288eb63248ab74d821ed7df2f378b48d7fc8a200c061078",
+      "size_bytes": 74899641
+    },
+    "archive/race_raw/qwen2.5-7b-instruct.json": {
+      "sha256": "9146b28e9a778a2908f39a538570200ebe95776552b7e8b25893b44fe4732fc8",
+      "size_bytes": 74299515
+    },
+    "archive/race_sentence_consolidated.tsv": {
+      "sha256": "e36899afe20559f00fef530a623e4496fe9d14ab156eb364a0bed86f64cab77a",
+      "size_bytes": 429766274
+    },
+    "archive/reconciliation_models.json": {
+      "sha256": "d9d4036452f0ed382d64f320d0a806c23fbdfd7bcf4cc9c50e1941f5fdbc5d8c",
+      "size_bytes": 944
+    },
+    "archive/winogrande_sentence_consolidated.tsv": {
+      "sha256": "09fa9d8268f684c68ff75993afad6fd9fb04317df21121549722fc24670d817d",
+      "size_bytes": 13244509
+    },
+    "corrected/f_table.tsv": {
+      "sha256": "e753aa974098615f654496125886285bb03113e70e97577588ba92c3e5dce4da",
+      "size_bytes": 2047842
+    },
+    "corrected/f_table.tsv.provenance.json": {
+      "sha256": "4c9e24f1577e5a673ffa7349033a25f558fb444573fe08dcb8047246e3757887",
+      "size_bytes": 59864
+    },
+    "corrected/f_table_prompt_equal_transfer.tsv": {
+      "sha256": "eb226c198efa1eb881baf5b9d3ea0f73f30cdcc71b3a687886f7fdb393656fd7",
+      "size_bytes": 2076869
+    },
+    "corrected/f_table_prompt_equal_transfer.tsv.provenance.json": {
+      "sha256": "18625071d74f48c556d7c0082e55afa83ac2820cb5fa12afb94a88f408092170",
+      "size_bytes": 59896
+    },
+    "corrected/f_table_revision_candidate_finite_extreme.tsv": {
+      "sha256": "b77b38270f016b4eefb35a62474487d6311860b8ccd079a2064a046720de8741",
+      "size_bytes": 2404297
+    },
+    "corrected/f_table_revision_candidate_finite_extreme.tsv.provenance.json": {
+      "sha256": "49c667e3c066f74da9764d2e5ac2a37f16a929d68f9af5d6cb06538228d12f6f",
+      "size_bytes": 59987
+    },
+    "corrected/f_table_revision_candidate_pairwise_drop.tsv": {
+      "sha256": "8bc4d4d8f2490627e9d3913de84b289bf93aaf66c1593f9dc1f3c36f5fd44006",
+      "size_bytes": 2341467
+    },
+    "corrected/f_table_revision_candidate_pairwise_drop.tsv.provenance.json": {
+      "sha256": "08cc782f90d7f5130da967ee1d428258b85b148abc025dad4a49bcc04624ea5c",
+      "size_bytes": 59967
+    },
+    "corrected/race/sentence/llama-3.1-8b-instruct_segment.tsv.gz": {
+      "sha256": "15fe6257d60142cf6f52caf07fcdc9d053394128c91cc425e8d0848c0159a588",
+      "size_bytes": 8500765
+    },
+    "corrected/race/sentence/qwen2.5-0.5b-instruct_segment.tsv.gz": {
+      "sha256": "2f86d739fa23e2ed9378b263f205c4d73c0732dca314eb670a4bce031c2fc2ad",
+      "size_bytes": 8456715
+    },
+    "corrected/race/sentence/qwen2.5-14b-instruct_segment.tsv.gz": {
+      "sha256": "db468b3601b02fabd372c933a8a29d3ce753ea4346fe52d291ee11ceb5e6902e",
+      "size_bytes": 8545332
+    },
+    "corrected/race/sentence/qwen2.5-3b-instruct_segment.tsv.gz": {
+      "sha256": "6f03d2a250162d8aade8419323cdff2a71ddeb1b973f558f181c5f52043a0bed",
+      "size_bytes": 8693698
+    },
+    "corrected/race/sentence/qwen2.5-7b-instruct_segment.tsv.gz": {
+      "sha256": "3161eea1684cc9efe8212bb0cba8ed7c6c25cc15aff55c515fe7bee93f9adcd0",
+      "size_bytes": 8568063
+    },
+    "corrected/race/sentence/segments.tsv.gz": {
+      "sha256": "406f2e22389c657b29a3b4fcc81c749c6296ad2185042422cb23f51d7c6d9419",
+      "size_bytes": 2046182
+    },
+    "corrected/race_scalar_paper_compatibility.tsv": {
+      "sha256": "c9992cb4e1a666dd3d47c79bd612d0cbff787a401f5d393c7bd4158ece3aea9a",
+      "size_bytes": 260694
+    },
+    "corrected/race_scalar_paper_compatibility.tsv.provenance.json": {
+      "sha256": "f5e167b9faeed3e71789bf421dad49e02e052972db44a4684a9056c7ce1cc7e8",
+      "size_bytes": 11509
+    }
+  },
+  "model_identity_caveat": "Hosted endpoint names do not establish immutable provider snapshots. A corrected result without explicit snapshot identifiers is only nominally comparable under the same method.",
+  "outputs": {
+    "historical_claims.tsv": {
+      "sha256": "941cc944e5b806fac434992357c57738cbf2407a607cf4b97a91f44d2e20603a",
+      "size_bytes": 143093
+    },
+    "manuscript_disposition.tsv": {
+      "sha256": "15bd6641f7f24d9b7358bb9b3fc2f98e1486f827ccae50233b68b2576af9dd6a",
+      "size_bytes": 3391
+    },
+    "reconciliation.tsv": {
+      "sha256": "82136a3e8454e15a4936b34c26adf1f6f86f71a67c76b61eabca9f26e14bce2e",
+      "size_bytes": 1273384
+    },
+    "reconciliation_checks.json": {
+      "sha256": "c73fc8df496299d87e6c660efcbd0b30ec01a0534af32084a52ed69a454e4862",
+      "size_bytes": 1157589
+    }
+  },
+  "paper_reference": {
+    "audited_claim_set_sha256": "07b39fa99ba62247e231569806c2cb74a96d209d5a3f226c81e92016a9053831",
+    "claim_canonicalization": "utf8_json_sorted_keys_claim_id_v1",
+    "claim_scope": "Tables 1-2 plus explicitly enumerated Figure 13 and main-text numerical claims",
+    "identity_status": "unversioned_reference_not_byte_pinned",
+    "pdf_sha256": null,
+    "reference_id": "arxiv:2606.32008:unversioned-audited-claim-set",
+    "version": null,
+    "work_id": "arXiv:2606.32008"
+  },
+  "race_caveat": "The RACE F_pred/F_attr cells printed in Table 2 are scalar, answer-conditioned correct-vs-rest Pearson r-squared values on the historical 136,313-row grid, although the paper describes RACE as an RV comparison. Corrected-grid scalar output is compatibility-only; use the multiclass RACE outputs for the stated estimand.",
+  "schema_version": 2,
+  "software": {
+    "numpy": "2.2.3",
+    "pandas": "2.2.3",
+    "python": "3.12.14+meta",
+    "python_implementation": "CPython"
+  }
+}

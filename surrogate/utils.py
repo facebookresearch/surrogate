@@ -24,8 +24,7 @@ WORD_RX: re.Pattern[str] = re.compile(
 )
 # Sentence regex
 SENTENCE_RX: re.Pattern[str] = re.compile(
-    r"((?:^\s*(?:-|(?:\d+|\w)[\.\)])|\.(?=$|\s+)|;|[!?]+)\n*)",
-    flags=re.MULTILINE,
+    r"((?:^\s*(?:-|(?:\d+|\w)[\.\)])|\.(?=$|\s+)|;|[!?]+)\n*)"
 )
 
 
@@ -56,29 +55,19 @@ def _segment_sentences(text: str) -> tuple[list[str], str]:
     sentences_and_delimiters = SENTENCE_RX.split(text)
     sentences_raw = sentences_and_delimiters[::2]
     delimiters = sentences_and_delimiters[1::2]
-    assert len(sentences_raw) == len(delimiters) + 1, (
-        f"{len(sentences_raw)=} {len(delimiters)=}"
-    )
+    assert (
+        len(sentences_raw) == len(delimiters) + 1
+    ), f"{len(sentences_raw)=} {len(delimiters)=}"
 
     segments: list[str] = []
-    pending_prefix = sentences_raw[0]
-    if pending_prefix:
-        segments.append(pending_prefix)
-        pending_prefix = ""
+    if sentences_raw[0]:
+        segments.append(sentences_raw[0])
 
     for sentence, delimiter in zip(sentences_raw[1:], delimiters):
         if segments:
             segments[-1] += delimiter
-        else:
-            pending_prefix += delimiter
         if sentence:
-            segments.append(pending_prefix + sentence)
-            pending_prefix = ""
-
-    if pending_prefix:
-        segments.append(pending_prefix)
+            segments.append(sentence)
 
     template = "{}" * len(segments)
     return segments, template
-
-

@@ -18,6 +18,7 @@ from surrogate.eval_constants import (
     ANLI_CONFIG,
     BOOLQ_CONFIG,
     EvalConfig,
+    RACE_CONFIG,
     WINOGRANDE_CONFIG,
 )
 
@@ -48,9 +49,14 @@ MODELS_QWEN25_BASE: list[tuple[str, str]] = [
 ]
 
 MODELS_LLAMA31_INSTRUCT: list[tuple[str, str]] = [
-    ("llama-3.1-8b-instruct", "meta-llama/Meta-Llama-3.1-8B-Instruct"),
-    ("llama-3.1-70b-instruct", "meta-llama/Meta-Llama-3.1-70B-Instruct"),
+    ("llama-3.1-8b-instruct", "meta-llama/Llama-3.1-8B-Instruct"),
+    ("llama-3.1-70b-instruct", "meta-llama/Llama-3.1-70B-Instruct"),
 ]
+
+LEGACY_MODEL_CACHE_BASENAMES: dict[str, str] = {
+    "meta-llama/Llama-3.1-8B-Instruct": "Meta-Llama-3.1-8B-Instruct",
+    "meta-llama/Llama-3.1-70B-Instruct": "Meta-Llama-3.1-70B-Instruct",
+}
 
 
 MODEL_SETS: dict[str, list[tuple[str, str]]] = {
@@ -83,6 +89,13 @@ def _boolq_prompt(row: pd.Series) -> str:
     return f"Context:\n{row['passage']}.\n\nQuestion:\n{row['question']}."
 
 
+def _boolq_preprocess(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize HuggingFace's ``label`` field to the paper's ``answer``."""
+    if "answer" not in df.columns:
+        df["answer"] = df["label"].astype(bool)
+    return df
+
+
 def _anli_prompt(row: pd.Series) -> str:
     return f"Premise:\n{row['premise']}.\n\nHypothesis:\n{row['hypothesis']}."
 
@@ -96,6 +109,8 @@ def _winogrande_prompt(row: pd.Series) -> str:
 
 
 def _lambada_preprocess(df: pd.DataFrame) -> pd.DataFrame:
+    if {"context", "target"}.issubset(df.columns):
+        return df
     parts = df["text"].str.rsplit(n=1)
     df["context"] = parts.str[0]
     df["target"] = parts.str[1]
@@ -106,6 +121,32 @@ def _lambada_prompt(row: pd.Series) -> str:
     return str(row["context"])
 
 
+def _ensure_period(text: str) -> str:
+    """Append a period unless text already has sentence-ending punctuation."""
+    text = text.rstrip()
+    return text if not text or text[-1] in ".!?;" else text + "."
+
+
+def _race_preprocess(df: pd.DataFrame) -> pd.DataFrame:
+    """Expand HuggingFace RACE's options list into stable A-D columns."""
+    if {"A", "B", "C", "D"}.issubset(df.columns):
+        return df
+    for option_idx, label in enumerate(("A", "B", "C", "D")):
+        df[label] = df["options"].str[option_idx]
+    return df
+
+
+def _race_prompt(row: pd.Series) -> str:
+    return (
+        f"Article:\n{row['article']}\n\n"
+        f"Question:\n{_ensure_period(str(row['question']))}\n\n"
+        f"A. {_ensure_period(str(row['A']))}\n"
+        f"B. {_ensure_period(str(row['B']))}\n"
+        f"C. {_ensure_period(str(row['C']))}\n"
+        f"D. {_ensure_period(str(row['D']))}"
+    )
+
+
 BENCHMARKS: dict[str, BenchmarkSpec] = {
     "boolq": BenchmarkSpec(
         name="boolq",
@@ -114,7 +155,8 @@ BENCHMARKS: dict[str, BenchmarkSpec] = {
         hf_dataset_name="boolq",
         hf_split="validation",
         prompt_builder=_boolq_prompt,
-        answer_column="label",
+        answer_column="answer",
+        dataset_preprocessor=_boolq_preprocess,
     ),
     "anli_r1": BenchmarkSpec(
         name="anli_r1",
@@ -149,6 +191,17 @@ BENCHMARKS: dict[str, BenchmarkSpec] = {
         prompt_builder=_winogrande_prompt,
         answer_column="answer",
     ),
+    "race": BenchmarkSpec(
+        name="race",
+        eval_config=RACE_CONFIG,
+        hf_dataset_path="ehovy/race",
+        hf_dataset_name="all",
+        hf_split="test",
+        prompt_builder=_race_prompt,
+        answer_column="answer",
+        scoring_mode="per_prompt_logit_difference",
+        dataset_preprocessor=_race_preprocess,
+    ),
     "lambada": BenchmarkSpec(
         name="lambada",
         eval_config=None,
@@ -177,7 +230,10 @@ def resolve_model_path(hf_hub_id: str) -> str:
     For gated models (e.g. Llama), set the ``HF_TOKEN`` environment variable
     to a valid HuggingFace access token.
     """
-    local_dir: str = os.path.join(LOCAL_MODEL_DIR, os.path.basename(hf_hub_id))
+    cache_basename: str = LEGACY_MODEL_CACHE_BASENAMES.get(
+        hf_hub_id, os.path.basename(hf_hub_id)
+    )
+    local_dir: str = os.path.join(LOCAL_MODEL_DIR, cache_basename)
     if os.path.isdir(local_dir) and os.listdir(local_dir):
         logger.info(f"Using cached model at {local_dir}")
         return local_dir
@@ -208,13 +264,28 @@ def _dataset_cache_dir(spec: "BenchmarkSpec") -> str:
     return os.path.join(LOCAL_DATASET_DIR, folder)
 
 
-def load_benchmark_dataset(spec: "BenchmarkSpec") -> pd.DataFrame:
+def load_benchmark_dataset(
+    spec: "BenchmarkSpec",
+    dataset_file: str | None = None,
+) -> pd.DataFrame:
     """Load benchmark data from local cache or HuggingFace Hub.
 
     Datasets are cached under ``LOCAL_DATASET_DIR`` (``/tmp/datasets/``).
     If the dataset is already cached it is loaded from disk; otherwise it is
     downloaded from HuggingFace Hub on first access.
     """
+    if dataset_file is not None:
+        logger.info(f"Loading frozen dataset file {dataset_file}")
+        df: pd.DataFrame = pd.read_csv(dataset_file, sep="\t")
+        if len(df.columns) > 0 and str(df.columns[0]).startswith("Unnamed:"):
+            index_column: str = str(df.columns[0])
+            df = df.set_index(index_column)
+            df.index.name = None
+        if spec.dataset_preprocessor is not None:
+            df = spec.dataset_preprocessor(df)
+        logger.info(f"Loaded {spec.name}: {len(df)} rows from {dataset_file}")
+        return df
+
     from datasets import load_dataset
 
     os.makedirs(LOCAL_DATASET_DIR, exist_ok=True)
@@ -234,7 +305,7 @@ def load_benchmark_dataset(spec: "BenchmarkSpec") -> pd.DataFrame:
         split=spec.hf_split,
         cache_dir=LOCAL_DATASET_DIR,
     )
-    df: pd.DataFrame = ds.to_pandas()
+    df = ds.to_pandas()
     if spec.dataset_preprocessor is not None:
         df = spec.dataset_preprocessor(df)
     logger.info(f"Loaded {spec.name}: {len(df)} rows (cache_dir={LOCAL_DATASET_DIR})")

@@ -5,21 +5,22 @@
 # LICENSE file in the root directory of this source tree.
 
 #
-# Quick smoke test: run all 6 benchmarks with only Qwen2.5-0.5B-Instruct
+# Quick smoke test: run all 7 benchmarks with only Qwen2.5-0.5B-Instruct
 # and 10 samples each. Useful for validating the pipeline end-to-end
 # without waiting for large models or full datasets.
 #
 # Usage:
-#   bash benchmark_scripts/run_small_test.sh
+#   bash benchmark_scripts/simple_smoke_test.sh
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-BENCHMARKS=(boolq anli_r1 anli_r2 anli_r3 winogrande lambada)
+BENCHMARKS=(boolq anli_r1 anli_r2 anli_r3 winogrande race lambada)
 MODEL_FILTER="qwen2.5-0.5b-instruct"
 MODEL_SET="Qwen2.5-Instruct"
 MAX_SAMPLES=10
+RESULTS_DIR="${RESULTS_DIR:-results/smoke}"
 
 SUCCESSES=0
 FAILURES=0
@@ -34,16 +35,17 @@ for benchmark in "${BENCHMARKS[@]}"; do
     echo "  Benchmark: ${benchmark} | Model: ${MODEL_FILTER} | Samples: ${MAX_SAMPLES}"
     echo "================================================================"
 
-    extra_args=""
+    extra_args=(--pregrouper sentence)
     if [[ "$benchmark" == "lambada" ]]; then
-        extra_args="--max-forward-passes 10000"
+        extra_args=(--pregrouper word --max-forward-passes 10000)
     fi
 
     if BENCHMARK_MODELS="$MODEL_FILTER" python -m benchmark_scripts.run_benchmark \
         --benchmark "$benchmark" \
         --model-set "$MODEL_SET" \
         --max-samples "$MAX_SAMPLES" \
-        $extra_args; then
+        --results-dir "$RESULTS_DIR" \
+        "${extra_args[@]}"; then
         SUCCESSES=$((SUCCESSES + 1))
     else
         FAILURES=$((FAILURES + 1))

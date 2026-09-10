@@ -115,3 +115,24 @@ WINOGRANDE_CONFIG = EvalConfig(
         "option 2": [ReportToken(alias="2", surface="2")],
     },
 )
+
+RACE_CONFIG = EvalConfig(
+    system_prompt=(
+        "You are a reading comprehension assistant. You will be shown an "
+        "article followed by a multiple-choice question with four options "
+        "labeled A, B, C, and D. Based on the article, answer with ONLY the "
+        "letter of the correct option."
+    ),
+    label_tokens={
+        "A": token_variations("A"),
+        "B": token_variations("B"),
+        "C": token_variations("C"),
+        "D": token_variations("D"),
+    },
+    report_tokens={
+        "A": ordered_token_variations("A"),
+        "B": ordered_token_variations("B"),
+        "C": ordered_token_variations("C"),
+        "D": ordered_token_variations("D"),
+    },
+)

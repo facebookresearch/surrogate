@@ -10,6 +10,13 @@ build/
 .pytest_cache/
 .mypy_cache/
 
+# Historical reconciliation inputs are audited separately and may contain
+# private archive column aliases. Only the sanitized reconciliation outputs
+# belong in the public repository.
+**/reconciliation_models.json
+**/*_consolidated.tsv
+reconciliation_archive/
+
 benchmark_scripts/mg_run_benchmark.py
 
 # Bulky regeneratable outputs — per-model gzipped TSVs ARE committed
@@ -17,3 +24,21 @@ benchmark_scripts/mg_run_benchmark.py
 # results/ is regeneratable from those + the postprocess scripts.
 results/**/*.tsv
 !results/f_table.tsv
+!results/f_table_finite_extreme_sensitivity.tsv
+!results/f_table_prompt_equal_transfer.tsv
+!results/f_table_message_scopes.tsv
+!results/f_table_anli_contrasts.tsv
+!results/f_table_revision_candidate_pairwise_drop.tsv
+!results/f_table_revision_candidate_finite_extreme.tsv
+!results/race_rv_open.tsv
+!results/race_rv_paper_complete_case.tsv
+!results/race_multiclass_open.tsv
+!results/race_multiclass_paper_global_complete_case.tsv
+!results/race_scalar_paper_compatibility.tsv
+!results/reconciliation/reconciliation.tsv
+!results/reconciliation/historical_claims.tsv
+!results/reconciliation/manuscript_disposition.tsv
+!results/reconciliation/reconciliation_manifest.json
+!results/reconciliation/reconciliation_checks.json
+!results/coverage.tsv
+!results/artifact_manifest.json

@@ -41,7 +41,7 @@ from typing import Any, Literal
 import torch
 from surrogate.transformers_model import TransformersModel
 from surrogate.model_types import Dialog
-from surrogate.utils import segment_text
+from surrogate.text_augmentation import dialog_segments
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -257,12 +257,10 @@ async def attention_segment_scores(
 
     model._ensure_loaded()
 
-    # Step 1: Segment the user message with regex segmentation
-    assert len(dialog.messages) >= 2, (
-        f"Dialog must have at least 2 messages, got {len(dialog.messages)}"
-    )
-    user_text = dialog.messages[1].content
-    segment_texts, _ = segment_text(user_text, level=pregrouper_id)
+    # Step 1: Segment every message in the same order as ablation scoring.
+    segment_texts: list[str] = [
+        segment.text for segment in dialog_segments(dialog, pregrouper_id)
+    ]
 
     if not segment_texts:
         return []

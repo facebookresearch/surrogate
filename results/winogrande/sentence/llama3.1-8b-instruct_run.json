@@ -1,0 +1,54 @@
+{
+  "artifact_sha256": {
+    "segment": "99be9e350ae988abadb0bea5bdcbdbe8348c1ef96162d4125bfa09d93a327401",
+    "tokens": "2c61fb5717c2f4bbca68234a2f945baab576472bd2b70e647c1abd9c6e04367d"
+  },
+  "availability_status": "complete",
+  "benchmark": "winogrande",
+  "canary": null,
+  "identity_attestation": "Hosted prompt and ablation coordinates were verified against the canonical public segment manifest.",
+  "logprob_granularity": "label_aggregate",
+  "manifest_sha256": "842a2a6db914c6c9ffc69ada6ae462489307aca15a82d6edc3a01cbace2b7f48",
+  "model": "llama3.1-8b-instruct",
+  "pregrouper": "sentence",
+  "producer": {
+    "generated_at": "2026-09-09T14:06:18-07:00",
+    "producer_revision": "de1d8f6984b89077a482b13a9dbeb9ce88cdaafd1aba998df3fda166dc9cbe28",
+    "request_parameters": {
+      "content_filter_policy": "explicit_missing_after_confirmation",
+      "echo": false,
+      "final_audit_attempts_per_failed_coordinate_per_round": 5,
+      "final_audit_max_rounds": 3,
+      "final_audit_rechecks_content_filters": true,
+      "initial_max_transient_attempts": 5,
+      "max_tokens": 1,
+      "scoring": "first_generated_token_label_logprobs",
+      "terminal_failure_policy": "explicit_nan_after_final_audit",
+      "top_logprobs": 19
+    },
+    "served_model": "llama3.1-8b-instruct"
+  },
+  "producer_audit_receipt": {
+    "entry_id": "winogrande/sentence/llama3.1-8b-instruct",
+    "path": "hosted_classification_audit_receipt.json",
+    "sha256": "6e50059b699e6de9d39eefb4602d74a86dd502d83b9c4aad3823321574f11cf4"
+  },
+  "prompts": 1267,
+  "schema_version": 1,
+  "segmentation_scope": "full_dialog_in_message_order",
+  "segments": 9135,
+  "source_format": "hosted_label_logprob_json",
+  "source_sha256": "6eb82094e9db53f5d0d238a14c0cea4e802f92e3062f5f09e74dda865c7809fc",
+  "source_size_bytes": 1242951,
+  "transformation_source_sha256": {
+    "benchmark_scripts/benchmark_config.py": "2eab350439b48525eaf0f5b710856a494af61af2c89e1286ed9029514eb64dfb",
+    "benchmark_scripts/dialog_identity.py": "c259193fea2cd45a079b9c0ea1ff1f4b5ed6a030a965b7c43ee738551b306939",
+    "benchmark_scripts/hosted_audit_receipt.py": "08bd899c6e594e8d055cec247898361a16905a2c263f74219e2912d90852d04f",
+    "benchmark_scripts/hosted_completion.py": "b87a8e391f7532157a45b3c42c411f97f8ee2c349fb30b98b01756d091df4213",
+    "benchmark_scripts/hosted_completion_audit_receipt.py": "c0cf3091ce96f495bef093b3d386b2b0852fca288f4d94b18fe936337fb45dcc",
+    "benchmark_scripts/import_hosted_results.py": "ff29713e0d6f9688a0fea70ce7e75be31b5a4a52ee4467a0973a9cc1c59709d1",
+    "benchmark_scripts/provenance_sources.py": "db9b3469255d2c4724b94bc37d0b46e635f92101924a9de77c6c2c1ae2483e77",
+    "benchmark_scripts/record_hosted_provenance.py": "70b1c2347002fd3d96792b5b150eb263e2df21fb23bf82dc81744f339eba0e18",
+    "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6"
+  }
+}

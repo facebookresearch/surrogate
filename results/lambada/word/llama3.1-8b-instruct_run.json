@@ -1,0 +1,46 @@
+{
+  "artifact_sha256": {
+    "segment": "42aa0ea2fb6c68db6ed45d89055f471d174b1dda31a913b7456a96c46e77e11c"
+  },
+  "availability_status": "complete",
+  "benchmark": "lambada",
+  "canary": null,
+  "identity_attestation": "Hosted prompt and ablation coordinates were verified against the canonical public segment manifest.",
+  "manifest_sha256": "63a99399ec879abcaa66cb389a7840ff68b836373f8a4ac52bb3d6fdf1aa74be",
+  "model": "llama3.1-8b-instruct",
+  "pregrouper": "word",
+  "producer": {
+    "generated_at": "2026-09-09T08:47:46+00:00",
+    "producer_revision": "2f08e7e22af65aa54119ce324960a948088080e9ecde14bec2f5cc6605a7acff",
+    "request_parameters": {
+      "echo": true,
+      "max_tokens": 0,
+      "max_transient_attempts": 5,
+      "scoring": "teacher_forced_echo_target_logprob_sum",
+      "top_logprobs": 20
+    },
+    "served_model": "llama3.1-8b-instruct"
+  },
+  "producer_audit_receipt": {
+    "entry_id": "lambada/word/llama3.1-8b-instruct",
+    "path": "hosted_completion_audit_receipt.json",
+    "sha256": "69d02b4b13318ee185b57b7287ea26ff87ccffdd8b1f66a7979717f0f1ab1888"
+  },
+  "schema_version": 1,
+  "segmentation_scope": "full_dialog_in_message_order",
+  "segments": 10000,
+  "source_format": "hosted_completion_logprob_json",
+  "source_sha256": "98af629c8f72be5b43060ac722f40f7cac80ba88a8a3135b740e88cda6687985",
+  "source_size_bytes": 2001930,
+  "transformation_source_sha256": {
+    "benchmark_scripts/benchmark_config.py": "2eab350439b48525eaf0f5b710856a494af61af2c89e1286ed9029514eb64dfb",
+    "benchmark_scripts/dialog_identity.py": "c259193fea2cd45a079b9c0ea1ff1f4b5ed6a030a965b7c43ee738551b306939",
+    "benchmark_scripts/hosted_audit_receipt.py": "08bd899c6e594e8d055cec247898361a16905a2c263f74219e2912d90852d04f",
+    "benchmark_scripts/hosted_completion.py": "b87a8e391f7532157a45b3c42c411f97f8ee2c349fb30b98b01756d091df4213",
+    "benchmark_scripts/hosted_completion_audit_receipt.py": "c0cf3091ce96f495bef093b3d386b2b0852fca288f4d94b18fe936337fb45dcc",
+    "benchmark_scripts/import_hosted_results.py": "ff29713e0d6f9688a0fea70ce7e75be31b5a4a52ee4467a0973a9cc1c59709d1",
+    "benchmark_scripts/provenance_sources.py": "db9b3469255d2c4724b94bc37d0b46e635f92101924a9de77c6c2c1ae2483e77",
+    "benchmark_scripts/record_hosted_provenance.py": "70b1c2347002fd3d96792b5b150eb263e2df21fb23bf82dc81744f339eba0e18",
+    "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6"
+  }
+}
