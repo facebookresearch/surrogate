@@ -150,6 +150,7 @@ class TestFTable(TestCase):
         points = {row["statistic"]: row["f_point"] for row in rows}
 
         self.assertAlmostEqual(float(points["spearman"]), 0.0)
+        self.assertAlmostEqual(float(points["pearson_r"]), 0.0)
         self.assertAlmostEqual(float(points["pearson_r2"]), 1.0)
 
     def test_published_transfer_is_row_pooled(self) -> None:
@@ -173,8 +174,70 @@ class TestFTable(TestCase):
         points = {row["statistic"]: row["f_point"] for row in rows}
 
         expected: float = float(np.corrcoef(source, target)[0, 1] ** 2)
+        self.assertAlmostEqual(
+            float(points["pearson_r"]), float(np.corrcoef(source, target)[0, 1])
+        )
         self.assertAlmostEqual(float(points["pearson_r2"]), expected)
         self.assertTrue(all(row["aggregation"] == "row_pooled" for row in rows))
+
+    def test_pair_correlations_report_expected_coverage_and_signed_pearson(
+        self,
+    ) -> None:
+        signals: dict[str, pd.Series] = {
+            "a": pd.Series([1.0, 2.0, 3.0, 4.0], index=[0, 1, 2, 3]),
+            "b": pd.Series([4.0, np.nan, 2.0, 1.0], index=[0, 1, 2, 3]),
+        }
+
+        rows = _emit_pair_corrs(
+            "test",
+            "F_pred",
+            signals,
+            20,
+            0.95,
+            np.random.default_rng(42),
+        )
+        by_statistic = {row["statistic"]: row for row in rows}
+
+        self.assertEqual(set(by_statistic), {"spearman", "pearson_r", "pearson_r2"})
+        pearson = by_statistic["pearson_r"]
+        self.assertAlmostEqual(float(pearson["f_point"]), -1.0)
+        self.assertEqual(pearson["n_observations"], 3)
+        self.assertEqual(pearson["expected_observations"], 4)
+        self.assertEqual(pearson["observation_coverage"], 0.75)
+        self.assertEqual(pearson["n_prompts"], 3)
+        self.assertEqual(pearson["expected_prompts"], 4)
+        self.assertEqual(pearson["prompt_coverage"], 0.75)
+
+    def test_transfer_reports_pair_specific_expected_coverage(self) -> None:
+        index = pd.MultiIndex.from_tuples(
+            [(0, 0), (0, 1), (1, 0), (1, 1)],
+            names=["prompt_idx", "seg_idx"],
+        )
+        source = pd.Series([1.0, 2.0, 3.0, 4.0], index=index)
+        target = pd.Series([4.0, np.nan, 2.0, 1.0], index=index)
+
+        rows = _emit_transfer(
+            benchmark="test",
+            metric="F_test_to_attr",
+            src_by_model={"source": source},
+            tgt_by_model={"target": target},
+            signed=True,
+            n_resamples=20,
+            conf=0.95,
+            rng=np.random.default_rng(42),
+        )
+
+        self.assertEqual(
+            {row["statistic"] for row in rows},
+            {"spearman", "pearson_r", "pearson_r2"},
+        )
+        for row in rows:
+            self.assertEqual(row["n_observations"], 3)
+            self.assertEqual(row["expected_observations"], 4)
+            self.assertEqual(row["observation_coverage"], 0.75)
+            self.assertEqual(row["n_prompts"], 2)
+            self.assertEqual(row["expected_prompts"], 2)
+            self.assertEqual(row["prompt_coverage"], 1.0)
 
     def test_clamps_api_infinities_but_not_open_models(self) -> None:
         signal = pd.Series([-float("inf"), -2.0, 3.0, float("inf")])
@@ -337,7 +400,7 @@ class TestFTable(TestCase):
             directed=True,
             reason="readout_contrast_mismatch",
         )
-        self.assertEqual(len(rows), 6)
+        self.assertEqual(len(rows), 9)
         self.assertTrue(
             all(row["availability_status"] == "unavailable" for row in rows)
         )
@@ -461,7 +524,8 @@ class TestFTable(TestCase):
             rng=np.random.default_rng(42),
         )
 
-        self.assertEqual(set(result), {"spearman", "pearson_r2"})
+        self.assertEqual(set(result), {"spearman", "pearson_r", "pearson_r2"})
+        self.assertTrue(np.isnan(result["pearson_r"][0]))
         self.assertTrue(np.isnan(result["pearson_r2"][0]))
 
     def test_all_missing_completion_model_remains_in_pair_grid(self) -> None:

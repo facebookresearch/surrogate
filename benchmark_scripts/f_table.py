@@ -30,10 +30,10 @@ Output schema (tab-separated)::
       F_align_to_attr, F_mag_to_attr, F_attn_rollout_to_attr,
       F_attn_mean_to_attr, F_attn_max_to_attr
 
-``statistic`` is ``spearman`` or ``pearson_r2``. By default the exact
-11-model paper cohort is used; ``--all-models`` opts into every discovered
-model. ``--transfer-aggregation prompt_equal_mean_r2`` retains the later
-notebook-source estimand as an explicitly labeled sensitivity.
+``statistic`` is ``spearman``, ``pearson_r``, or ``pearson_r2``. By default
+the exact 11-model paper cohort is used; ``--all-models`` opts into every
+discovered model. ``--transfer-aggregation prompt_equal_mean_r2`` retains the
+later notebook-source estimand as an explicitly labeled sensitivity.
 """
 
 import argparse
@@ -533,7 +533,11 @@ def _bootstrap_corrs(
             float("nan"),
             float("nan"),
         )
-        return {"spearman": missing, "pearson_r2": missing}
+        return {
+            "spearman": missing,
+            "pearson_r": missing,
+            "pearson_r2": missing,
+        }
     rx, ry = rankdata(x), rankdata(y)
     unique_clusters, cluster_inverse = np.unique(clusters, return_inverse=True)
 
@@ -591,11 +595,13 @@ def _bootstrap_corrs(
     spear: np.ndarray = np.asarray(spear_values)
     pear_r2: np.ndarray = pearson**2
     point_spear = float(_pearson_batch(rx[None, :], ry[None, :])[0])
-    point_pear_r2 = float(_pearson_batch(x[None, :], y[None, :])[0] ** 2)
+    point_pear = float(_pearson_batch(x[None, :], y[None, :])[0])
+    point_pear_r2 = point_pear**2
     alpha = (1.0 - conf) / 2.0 * 100.0
     out: dict[str, tuple[float, float, float]] = {}
     for name, point, samples in [
         ("spearman", point_spear, spear),
+        ("pearson_r", point_pear, pearson),
         ("pearson_r2", point_pear_r2, pear_r2),
     ]:
         finite = samples[np.isfinite(samples)]
@@ -615,11 +621,11 @@ def _bootstrap_corrs(
 def _pair_to_arrays(
     sa: pd.Series,
     sb: pd.Series,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Inner-join two series and return values plus prompt cluster IDs."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int]:
+    """Inner-join two series and return valid values and expected pair counts."""
     common = sa.index.intersection(sb.index)
     if len(common) == 0:
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), 0, 0
     a, b = sa.loc[common], sb.loc[common]
     paired = (
         pd.DataFrame({"x": a.values, "y": b.values})
@@ -630,7 +636,18 @@ def _pair_to_arrays(
         [index[0] if isinstance(index, tuple) else index for index in common]
     )
     valid: np.ndarray = np.isfinite(a.values) & np.isfinite(b.values)
-    return paired["x"].values, paired["y"].values, clusters[valid]
+    return (
+        paired["x"].values,
+        paired["y"].values,
+        clusters[valid],
+        len(common),
+        len(np.unique(clusters)),
+    )
+
+
+def _coverage_fraction(observed: int, expected: int) -> float:
+    """Return a coverage fraction, or NaN when no observations are expected."""
+    return observed / expected if expected else float("nan")
 
 
 def _emit_pair_corrs(
@@ -650,7 +667,15 @@ def _emit_pair_corrs(
     models: list[str] = list(sig_by_model)
     for i, a in enumerate(models):
         for b in models[i + 1 :]:
-            xs, ys, clusters = _pair_to_arrays(sig_by_model[a], sig_by_model[b])
+            (
+                xs,
+                ys,
+                clusters,
+                expected_observations,
+                expected_prompts,
+            ) = _pair_to_arrays(sig_by_model[a], sig_by_model[b])
+            n_observations: int = len(xs)
+            n_prompts: int = len(np.unique(clusters))
             pair_rng: np.random.Generator = (
                 _analysis_rng(bootstrap_seed, *rng_context, metric, a, b)
                 if bootstrap_seed is not None
@@ -666,8 +691,16 @@ def _emit_pair_corrs(
                         "model_t": b,
                         "metric": metric,
                         "statistic": stat,
-                        "n_observations": len(xs),
-                        "n_prompts": len(np.unique(clusters)),
+                        "n_observations": n_observations,
+                        "expected_observations": expected_observations,
+                        "observation_coverage": _coverage_fraction(
+                            n_observations, expected_observations
+                        ),
+                        "n_prompts": n_prompts,
+                        "expected_prompts": expected_prompts,
+                        "prompt_coverage": _coverage_fraction(
+                            n_prompts, expected_prompts
+                        ),
                         "f_point": point,
                         "f_lo": lo,
                         "f_hi": hi,
@@ -710,7 +743,11 @@ def _emit_unavailable_pairs(
             "statistic": statistic,
             "aggregation": aggregation,
             "n_observations": 0,
+            "expected_observations": 0,
+            "observation_coverage": float("nan"),
             "n_prompts": 0,
+            "expected_prompts": 0,
+            "prompt_coverage": float("nan"),
             "f_point": float("nan"),
             "f_lo": float("nan"),
             "f_hi": float("nan"),
@@ -718,7 +755,7 @@ def _emit_unavailable_pairs(
             "unavailable_reason": reason,
         }
         for source, target in pairs
-        for statistic in ("spearman", "pearson_r2")
+        for statistic in ("spearman", "pearson_r", "pearson_r2")
     ]
 
 
@@ -747,6 +784,11 @@ def _emit_transfer(
             common = sa.index.intersection(sb.index)
             if len(common) == 0:
                 continue
+            expected_observations: int = len(common)
+            expected_prompt_values: np.ndarray = np.asarray(
+                [index[0] if isinstance(index, tuple) else index for index in common]
+            )
+            expected_prompts: int = len(np.unique(expected_prompt_values))
             paired = (
                 pd.DataFrame(
                     {
@@ -779,6 +821,8 @@ def _emit_transfer(
                     conf,
                     pair_rng,
                 ).items():
+                    n_observations = len(paired)
+                    n_prompts = len(np.unique(clusters))
                     rows.append(
                         {
                             "benchmark": benchmark,
@@ -787,8 +831,16 @@ def _emit_transfer(
                             "metric": metric,
                             "statistic": stat,
                             "aggregation": aggregation,
-                            "n_observations": len(paired),
-                            "n_prompts": len(np.unique(clusters)),
+                            "n_observations": n_observations,
+                            "expected_observations": expected_observations,
+                            "observation_coverage": _coverage_fraction(
+                                n_observations, expected_observations
+                            ),
+                            "n_prompts": n_prompts,
+                            "expected_prompts": expected_prompts,
+                            "prompt_coverage": _coverage_fraction(
+                                n_prompts, expected_prompts
+                            ),
                             "f_point": point,
                             "f_lo": lo,
                             "f_hi": hi,
@@ -798,10 +850,12 @@ def _emit_transfer(
 
             per_prompt: dict[str, list[float]] = {
                 "spearman": [],
+                "pearson_r": [],
                 "pearson_r2": [],
             }
             per_prompt_observations: dict[str, int] = {
                 "spearman": 0,
+                "pearson_r": 0,
                 "pearson_r2": 0,
             }
             for _, prompt_rows in paired.groupby("prompt_idx", sort=False):
@@ -815,6 +869,8 @@ def _emit_transfer(
                     per_prompt["spearman"].append(spearman)
                     per_prompt_observations["spearman"] += len(prompt_rows)
                 if np.isfinite(pearson):
+                    per_prompt["pearson_r"].append(pearson)
+                    per_prompt_observations["pearson_r"] += len(prompt_rows)
                     per_prompt["pearson_r2"].append(pearson**2)
                     per_prompt_observations["pearson_r2"] += len(prompt_rows)
 
@@ -852,7 +908,15 @@ def _emit_transfer(
                         "statistic": stat,
                         "aggregation": aggregation,
                         "n_observations": per_prompt_observations[stat],
+                        "expected_observations": expected_observations,
+                        "observation_coverage": _coverage_fraction(
+                            per_prompt_observations[stat], expected_observations
+                        ),
                         "n_prompts": len(values),
+                        "expected_prompts": expected_prompts,
+                        "prompt_coverage": _coverage_fraction(
+                            len(values), expected_prompts
+                        ),
                         "f_point": point,
                         "f_lo": float(lo),
                         "f_hi": float(hi),
