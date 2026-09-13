@@ -28,6 +28,9 @@ The release uses these primary choices:
 
 - User-message segment coordinates, with the full dialog retained as context.
 - Entailment-minus-contradiction log odds for ANLI.
+- No duplicated BOS or tokenizer-added special tokens: chat templates produce
+  the control-token prefix, and current runs subsequently tokenize rendered
+  prompts with `add_special_tokens=False`.
 - Model-pair-specific complete cases for non-finite hosted scores.
 - Row-pooled point estimates with prompt-cluster bootstrap intervals.
 - Signed Spearman and Pearson correlations, plus Pearson \(r^2\).
@@ -55,14 +58,17 @@ consolidate_results -> results/{benchmark}_{pregrouper}_segments.tsv
 compute_logodds     -> results/{benchmark}_{pregrouper}_logodds.tsv
 f_table             -> results/f_table.tsv
 race_rv             -> results/race_rv.tsv
+run_layerwise       -> results/{benchmark}/{pregrouper}/{model}_layers.tsv.gz
+layerwise_fidelity  -> results/layerwise_fidelity.tsv
 ```
 
 ### 1. Generate open-model outputs
 
 `run_benchmark` supports BoolQ, ANLI R1-R3, WinoGrande, RACE, and LAMBADA.
-For an audited reproduction, provide the frozen source TSV named in
-[`results/README.md`](results/README.md). Live Hugging Face datasets are useful
-for exploration but do not reproduce the frozen artifact byte-for-byte.
+For the audited coordinate and dataset snapshot, provide the frozen source TSV
+named in [`results/README.md`](results/README.md). Exact model-output bytes can
+also depend on the pinned model, numerical libraries, hardware, and backend;
+live Hugging Face datasets are intended only for exploration.
 
 ```bash
 python -m benchmark_scripts.run_benchmark \
@@ -82,8 +88,12 @@ Both attention and ablation use the same full-dialog segmentation. Every row
 records global and message-local segment indices, role, and exact segment text;
 the runner checks alignment before merging the phases.
 
-The batch script runs the five open models across all eight configurations on
-two GPUs:
+Rendered chat prompts are complete model inputs. The runner therefore disables
+tokenizer-level special-token insertion after applying the chat template. This
+prevents Llama tokenizers from prepending a second BOS token.
+
+The batch script runs the five open models across all eight ordinary
+configurations and the complete BoolQ/ANLI layer matrix on two GPUs:
 
 ```bash
 DATASET_DIR=/path/to/frozen-tsvs \
@@ -147,13 +157,32 @@ python -m benchmark_scripts.f_table \
 
 # Canonical multivariate RACE analysis
 python -m benchmark_scripts.race_rv
+
+# Compact per-layer scores for one model/configuration
+python -m benchmark_scripts.run_layerwise \
+    --benchmark boolq \
+    --model-set Llama3.1-Instruct \
+    --models llama-3.1-8b-instruct \
+    --dataset-file /path/to/google_boolq_validation.tsv
+
+# Matched-relative-depth F_pred and F_attr curves
+python -m benchmark_scripts.layerwise_fidelity
+
+# Unsmoothed nearest-native-layer sensitivity (no model rerun)
+python -m benchmark_scripts.layerwise_fidelity \
+    --depth-alignment nearest_native \
+    --output results/layerwise_fidelity_nearest_sensitivity.tsv
 ```
 
 `F_pred` is prompt-level and therefore uses the full dialog. Other metrics use
-the requested segment coordinates. ANLI E-C `F_align` and
-`F_align_to_attr` are explicitly unavailable in the current artifact because
-the stored open-model readout projection used a different contrast; the code
-does not relabel those values.
+the requested segment coordinates. For ANLI E-C, `F_align` and
+`F_align_to_attr` use the requested sum-unembedding direction from the final
+decoder block in the sidecar-bound layer artifacts. Contrasts matching the
+ordinary run readout continue to use the ordinary segment tables. The F-table
+validator requires every raw final-layer contrast and Pearson endpoint to match
+the ordinary BF16-token reconstruction within `1e-4`. Spearman endpoints use a
+`1e-3` tolerance because rank correlation is discontinuous when independent
+BF16 batches swap nearly tied values.
 
 Additional scopes and ANLI contrasts remain reproducible from the raw files:
 
@@ -163,9 +192,23 @@ python -m benchmark_scripts.f_table \
     --benchmarks anli_r1 anli_r2 anli_r3 \
     --scopes all system user \
     --contrasts entailment_neutral entailment_contradiction \
-    --anli-contrast entailment_contradiction \
     --output results/anli_sensitivity.tsv
 ```
+
+Layer artifacts likewise retain every configured label and every system/user
+segment. The canonical layerwise table uses user coordinates and ANLI
+entailment-minus-contradiction, while entailment-minus-neutral and the `all`,
+`system`, and `user` scopes can be selected without rerunning a model. Layer
+files contain label-level scalars only—never hidden-state vectors. Slot zero is
+the embedding output; later slots are decoder-block outputs with the model's
+final normalization applied. Relative-depth comparisons exclude the embedding
+slot and linearly interpolate decoder blocks. An unsmoothed nearest-native
+sensitivity is available through `--depth-alignment nearest_native`. The stored sum-unembedding
+projection is a diagnostic approximation to the grouped-logsumexp attribution
+contrast; `F_attr` itself uses the exact grouped label scores. Canonical layer
+runs use BF16, SDPA, automatic device placement, and batch size 32. Use
+`run_all_benchmarks.sh` to generate the required five-model,
+four-configuration matrix.
 
 RACE is evaluated as a multivariate four-label signal using centered RV. The
 `all_pairs` representation is the six pairwise A-D margin system;

@@ -7,11 +7,10 @@
 
 """Validate a complete public surrogate-fidelity result artifact.
 
-The validator fails on the indexing bug that motivated this correction: each
-model's segment rows must use exactly the canonical ``(prompt_idx, seg_idx)``
-grid recorded by the model-independent segment manifest. Token-logprob rows
-may be sparse for hosted APIs, but their keys must be a subset of that grid and
-their coverage is made explicit in ``coverage.tsv``.
+Each model's segment rows must use exactly the canonical
+``(prompt_idx, seg_idx)`` grid recorded by the model-independent segment
+manifest. Token-logprob rows may be sparse for hosted APIs, but their keys must
+be a subset of that grid and their coverage is explicit in ``coverage.tsv``.
 """
 
 from __future__ import annotations
@@ -44,6 +43,7 @@ from benchmark_scripts.f_table import (
     OPEN_MODELS,
     PAPER_MODELS,
     _contrast_metadata,
+    _derived_input_paths as _f_table_derived_input_paths,
     _resolved_scope,
     _unsupported_model_components,
 )
@@ -76,23 +76,33 @@ from benchmark_scripts.hosted_completion_audit_receipt import (
     load_receipt as load_completion_receipt,
     projection_summary as completion_projection_summary,
 )
+from benchmark_scripts.layerwise_fidelity import (
+    DEFAULT_CONFIGS as LAYERWISE_CONFIGS,
+    _contrast_labels as _layer_contrast_labels,
+    _validate_layer_frame,
+    _validate_manifest_coverage as _validate_layer_manifest_coverage,
+)
 from benchmark_scripts.provenance_sources import (
     GOLD_OPEN_EXECUTION_MODEL_SOURCES,
     GOLD_HOSTED_CLASSIFICATION_AUDIT_RECEIPT_SHA256,
     GOLD_HOSTED_COMPLETION_AUDIT_RECEIPT_SHA256,
     GOLD_HOSTED_IDENTITY_ATTESTATION,
+    GOLD_HOSTED_IMPORT_SOURCE_SHA256,
     GOLD_OPEN_EXECUTION_SOURCE_SHA256,
+    GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256,
     GOLD_OPEN_MODEL_ARTIFACT_MANIFEST_SHA256,
     GOLD_OPEN_MODEL_REPOSITORIES,
     GOLD_OPEN_MODEL_REVISIONS,
     GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS,
     HOSTED_IMPORT_SOURCE_FILES,
     HOSTED_RECORD_SOURCE_FILES,
+    LAYER_EXECUTION_SOURCE_FILES,
     OPEN_COMPLETE_SOURCE_FILES,
     OPEN_EXECUTION_SOURCE_FILES,
     OPEN_MODEL_IDENTITY_FILENAMES,
     canonical_file_hash_manifest_sha256,
 )
+from surrogate.eval_constants import label_column_alias
 
 ARTIFACT_CONFIGS: list[tuple[str, str]] = [
     *DEFAULT_BENCHMARK_CONFIGS,
@@ -109,6 +119,7 @@ RELEASE_OPEN_DERIVED_TABLES: tuple[str, ...] = (
     "f_table_finite_extreme_sensitivity_open.tsv",
     "race_rv_open.tsv",
 )
+RELEASE_LAYERWISE_DERIVED_TABLES: tuple[str, ...] = ("layerwise_fidelity.tsv",)
 RELEASE_LAMBADA_CANARY_MODELS: tuple[str, ...] = (
     "gemini-2-5-flash-lite-vertex",
     "gpt-4-1",
@@ -120,6 +131,8 @@ OPEN_RUN_FIELDS: frozenset[str] = frozenset(
         "benchmark",
         "dataset",
         "execution_model_source",
+        "execution_dependency_hash_timing",
+        "execution_dependency_sha256",
         "execution_source_hash_timing",
         "manifest_sha256",
         "model",
@@ -138,6 +151,7 @@ OPEN_RUN_FIELDS: frozenset[str] = frozenset(
         "segmentation_scope",
         "software",
         "source_sha256",
+        "tokenization_verification",
     }
 )
 HOSTED_RUN_COMMON_FIELDS: frozenset[str] = frozenset(
@@ -193,12 +207,11 @@ OPEN_PARAMETER_FIELDS: frozenset[str] = frozenset(
         "max_samples",
         "phase_attention_implementation",
         "phases",
+        "rendered_chat_add_special_tokens",
         "seed",
     }
 )
-OPEN_SOFTWARE_FIELDS: frozenset[str] = frozenset(
-    {"cuda_runtime", "numpy", "pandas", "torch", "transformers"}
-)
+OPEN_SOFTWARE_FIELDS: frozenset[str] = frozenset({"numpy", "pandas", "torch"})
 OPEN_MODEL_METADATA_FILENAMES: frozenset[str] = OPEN_MODEL_IDENTITY_FILENAMES | {
     "added_tokens.json",
     "merges.txt",
@@ -207,6 +220,27 @@ OPEN_MODEL_METADATA_FILENAMES: frozenset[str] = OPEN_MODEL_IDENTITY_FILENAMES | 
     "tokenizer.model",
     "vocab.json",
 }
+
+
+def _expected_open_tokenization_verification(model: str) -> dict[str, Any]:
+    """Return the verified rendered-chat tokenization invariant by model."""
+    if model.startswith("qwen2.5-"):
+        return {
+            "effective_bos_count": 0,
+            "no_duplicate_special_tokens": True,
+            "verification_method": (
+                "qwen_rendered_token_ids_equal_with_special_tokens_true_or_false"
+            ),
+        }
+    if model == "llama-3.1-8b-instruct":
+        return {
+            "effective_bos_count": 1,
+            "no_duplicate_special_tokens": True,
+            "verification_method": "explicit_no_special_tokens_after_chat_template",
+        }
+    raise ValueError(f"No rendered-tokenization policy for {model}")
+
+
 DERIVED_PROVENANCE_FIELDS: frozenset[str] = frozenset(
     {
         "artifact_type",
@@ -328,6 +362,7 @@ ANALYSIS_SOURCE_FILES: tuple[str, ...] = (
     "benchmark_scripts/hosted_completion.py",
     "benchmark_scripts/hosted_completion_audit_receipt.py",
     "benchmark_scripts/import_hosted_results.py",
+    "benchmark_scripts/layerwise_fidelity.py",
     "benchmark_scripts/normalize_segment_outputs.py",
     "benchmark_scripts/provenance_sources.py",
     "benchmark_scripts/race_rv.py",
@@ -335,8 +370,81 @@ ANALYSIS_SOURCE_FILES: tuple[str, ...] = (
     "benchmark_scripts/seal_open_provenance.py",
     "benchmark_scripts/validate_results.py",
     "benchmark_scripts/run_all_benchmarks.sh",
+    "benchmark_scripts/run_layerwise.py",
     "surrogate/eval_constants.py",
+    "surrogate/layerwise_scoring.py",
+    "surrogate/model_types.py",
+    "surrogate/text_augmentation.py",
+    "surrogate/transformers_model.py",
     "surrogate/utils.py",
+)
+
+LAYER_RUN_FIELDS: frozenset[str] = frozenset(
+    {
+        "alignment",
+        "artifact",
+        "benchmark",
+        "dataset",
+        "label_score_definition",
+        "labels",
+        "layer_slots",
+        "manifest_sha256",
+        "model",
+        "model_artifact_hash_timing",
+        "model_artifact_manifest_sha256",
+        "model_artifact_sha256",
+        "model_identity_files_sha256",
+        "model_revision",
+        "model_source",
+        "parameters",
+        "pregrouper",
+        "schema_version",
+        "segmentation_scope",
+        "software",
+        "source_hash_timing",
+        "source_sha256",
+    }
+)
+LAYER_PARAMETER_FIELDS: frozenset[str] = frozenset(
+    {
+        "attention_implementation",
+        "batch_size",
+        "canary",
+        "device_map",
+        "max_samples",
+        "rendered_chat_add_special_tokens",
+        "seed",
+        "torch_dtype",
+    }
+)
+MAX_LAYER_FINAL_CONTRAST_ABS_ERROR: float = 1e-4
+# Spearman is discontinuous at ties: independent BF16 batches can swap nearly
+# equal values even when every final-layer contrast passes the 1e-4 raw-value
+# gate. Keep a separate, still-small bound for that derived rank statistic.
+MAX_LAYER_FINAL_SPEARMAN_ABS_ERROR: float = 1e-3
+LAYER_DATASET_FIELDS: frozenset[str] = frozenset(
+    {
+        "hf_name",
+        "hf_path",
+        "hf_split",
+        "normalized_frame_sha256",
+        "prompts",
+        "snapshot_filename",
+        "snapshot_sha256",
+    }
+)
+LAYER_SOFTWARE_FIELDS: frozenset[str] = frozenset(
+    {"cuda_runtime", "numpy", "pandas", "torch", "transformers"}
+)
+LAYER_DERIVED_SUPPORTING_SOURCE_FILES: tuple[str, ...] = (
+    "benchmark_scripts/benchmark_config.py",
+    "benchmark_scripts/derived_provenance.py",
+    "benchmark_scripts/f_table.py",
+    "surrogate/eval_constants.py",
+)
+F_TABLE_DERIVED_SUPPORTING_SOURCE_FILES: tuple[str, ...] = (
+    *DERIVED_SUPPORTING_SOURCE_FILES,
+    "benchmark_scripts/layerwise_fidelity.py",
 )
 
 
@@ -1122,7 +1230,7 @@ def _validate_gold_run_metadata_schema(
             raise ValueError(f"Gold hosted prompt count disagrees in {path}")
         return
 
-    if provenance.get("schema_version") != 3:
+    if provenance.get("schema_version") != 5:
         raise ValueError(f"Gold open schema version disagrees in {path}")
     if provenance.get("model_source") != GOLD_OPEN_MODEL_REPOSITORIES.get(model):
         raise ValueError(f"Gold open model source disagrees in {path}")
@@ -1131,9 +1239,14 @@ def _validate_gold_run_metadata_schema(
     dataset: Any = provenance.get("dataset")
     parameters: Any = provenance.get("parameters")
     software: Any = provenance.get("software")
+    tokenization: Any = provenance.get("tokenization_verification")
     if not isinstance(dataset, dict) or set(dataset) != OPEN_DATASET_FIELDS:
         raise ValueError(f"Gold open dataset metadata fields disagree in {path}")
-    if not isinstance(parameters, dict) or set(parameters) != OPEN_PARAMETER_FIELDS:
+    if (
+        not isinstance(parameters, dict)
+        or set(parameters) != OPEN_PARAMETER_FIELDS
+        or not isinstance(parameters.get("rendered_chat_add_special_tokens"), bool)
+    ):
         raise ValueError(f"Gold open parameter fields disagree in {path}")
     if not isinstance(software, dict) or set(software) != OPEN_SOFTWARE_FIELDS:
         raise ValueError(f"Gold open software fields disagree in {path}")
@@ -1143,6 +1256,8 @@ def _validate_gold_run_metadata_schema(
         if value is not None
     ):
         raise ValueError(f"Gold open software metadata is nonportable in {path}")
+    if tokenization != _expected_open_tokenization_verification(model):
+        raise ValueError(f"Gold open tokenization verification disagrees in {path}")
     spec = BENCHMARKS[benchmark]
     expected_dataset_identity: dict[str, Any] = {
         "hf_path": spec.hf_dataset_path,
@@ -1441,10 +1556,14 @@ def validate_configuration(
                 else HOSTED_IMPORT_SOURCE_FILES
             )
             repository_root: str = os.path.dirname(os.path.dirname(__file__))
-            expected_transformation_hashes: dict[str, str] = {
-                relative_path: _sha256(os.path.join(repository_root, relative_path))
-                for relative_path in transformation_files
-            }
+            expected_transformation_hashes: dict[str, str] = (
+                GOLD_HOSTED_IMPORT_SOURCE_SHA256
+                if require_gold_manifest
+                else {
+                    relative_path: _sha256(os.path.join(repository_root, relative_path))
+                    for relative_path in transformation_files
+                }
+            )
             if (
                 provenance.get("transformation_source_sha256")
                 != expected_transformation_hashes
@@ -1847,14 +1966,15 @@ def validate_configuration(
                 "attention": "eager",
             }
             if (
-                provenance.get("schema_version") != 3
+                provenance.get("schema_version") != 5
                 or not isinstance(parameters, dict)
                 or parameters.get("phases") != ["ablation", "attention"]
                 or parameters.get("phase_attention_implementation")
                 != expected_phase_backends
             ):
                 raise ValueError(
-                    f"Open phase/backend provenance disagrees in {run_metadata}"
+                    f"Open phase/backend/tokenization provenance disagrees in "
+                    f"{run_metadata}"
                 )
             execution_hashes: Any = provenance.get("source_sha256")
             repository_root: str = os.path.dirname(os.path.dirname(__file__))
@@ -1900,6 +2020,11 @@ def validate_configuration(
                 path: release_hashes[path] for path in OPEN_EXECUTION_SOURCE_FILES
             }
             if execution_hashes == gold_execution_hashes:
+                if model == "llama-3.1-8b-instruct":
+                    raise ValueError(
+                        f"Legacy duplicated-BOS Llama execution is forbidden in "
+                        f"{run_metadata}"
+                    )
                 expected_corrections: dict[str, dict[str, str]] = (
                     GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS
                 )
@@ -1907,12 +2032,22 @@ def validate_configuration(
                     GOLD_OPEN_EXECUTION_MODEL_SOURCES.get(model)
                 )
                 expected_source_hash_timing: str = "run_completion"
+                expected_dependency_hashes: dict[str, str] = dict(
+                    GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256
+                )
+                expected_dependency_hash_timing: str = (
+                    "post_run_reconstruction_not_execution_attested"
+                )
+                expected_add_special_tokens: bool = True
             elif execution_hashes == release_execution_hashes:
                 expected_corrections = {}
                 expected_execution_model_source = GOLD_OPEN_MODEL_REPOSITORIES.get(
                     model
                 )
                 expected_source_hash_timing = "run_start"
+                expected_dependency_hashes = release_execution_hashes
+                expected_dependency_hash_timing = "run_start"
+                expected_add_special_tokens = False
             else:
                 raise ValueError(
                     f"Execution source hashes are neither gold nor current release "
@@ -1932,8 +2067,22 @@ def validate_configuration(
                 raise ValueError(
                     f"Gold open execution source timing disagrees in {run_metadata}"
                 )
+            tokenization: Any = provenance.get("tokenization_verification")
+            if (
+                parameters.get("rendered_chat_add_special_tokens")
+                is not expected_add_special_tokens
+                or provenance.get("execution_dependency_sha256")
+                != expected_dependency_hashes
+                or provenance.get("execution_dependency_hash_timing")
+                != expected_dependency_hash_timing
+                or tokenization != _expected_open_tokenization_verification(model)
+            ):
+                raise ValueError(
+                    f"Open execution tokenization/dependency provenance disagrees "
+                    f"in {run_metadata}"
+                )
             actual_corrections: dict[str, dict[str, str]] = {}
-            for relative_path, execution_sha256 in execution_hashes.items():
+            for relative_path, execution_sha256 in expected_dependency_hashes.items():
                 release_sha256: str | None = release_hashes.get(relative_path)
                 if release_sha256 == execution_sha256:
                     continue
@@ -2006,12 +2155,17 @@ def _validate_open_model_identity_consistency(results_dir: str) -> None:
             signature: dict[str, Any] = {
                 field: provenance.get(field)
                 for field in (
+                    "execution_dependency_hash_timing",
+                    "execution_dependency_sha256",
                     "execution_model_source",
+                    "execution_source_hash_timing",
                     "model_source",
                     "model_revision",
                     "model_artifact_manifest_sha256",
                     "model_artifact_sha256",
                     "model_identity_files_sha256",
+                    "source_sha256",
+                    "tokenization_verification",
                 )
             }
             if baseline is None:
@@ -2021,6 +2175,664 @@ def _validate_open_model_identity_consistency(results_dir: str) -> None:
                 raise ValueError(
                     f"Open model identity differs between {baseline_path} and {path}"
                 )
+
+
+def _layer_artifact_columns(benchmark: str) -> set[str]:
+    """Return the exact scalar-only schema for one layer artifact."""
+    eval_config = BENCHMARKS[benchmark].eval_config
+    if eval_config is None:
+        raise ValueError(f"Layerwise benchmark {benchmark!r} has no label config")
+    labels: tuple[str, ...] = tuple(eval_config.label_tokens)
+    columns: set[str] = {
+        "prompt_idx",
+        "seg_idx",
+        "kind",
+        "answer",
+        "layer_slot",
+        "layer_kind",
+        "block_idx",
+        "delta_norm_postnorm",
+        *(f"label_score_{label_column_alias(label)}" for label in labels),
+    }
+    for first, second in itertools.combinations(labels, 2):
+        suffix: str = f"{label_column_alias(first)}_vs_{label_column_alias(second)}"
+        columns.add(f"w_dot_delta_z_postnorm_{suffix}")
+        columns.add(f"w_norm_{suffix}")
+    return columns
+
+
+def _canonical_layer_aliases(benchmark: str) -> dict[str, dict[str, str]]:
+    """Return each configured layer label's exact report-alias surface map."""
+    eval_config = BENCHMARKS[benchmark].eval_config
+    if eval_config is None:
+        raise ValueError(f"Layerwise benchmark {benchmark!r} has no label config")
+    aliases: dict[str, dict[str, str]] = {}
+    for label in eval_config.label_tokens:
+        report_tokens = eval_config.report_tokens.get(label)
+        if not report_tokens:
+            raise ValueError(
+                f"Layerwise label {label!r} has no canonical report tokens"
+            )
+        alias_map: dict[str, str] = {
+            token.alias: token.surface for token in report_tokens
+        }
+        if len(alias_map) != len(report_tokens):
+            raise ValueError(
+                f"Layerwise label {label!r} has duplicate report-token aliases"
+            )
+        aliases[label] = alias_map
+    return aliases
+
+
+def _is_token_id(value: Any) -> bool:
+    """Return whether *value* is an integer token ID rather than a boolean."""
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _validate_layer_alias_metadata(
+    label_metadata: Any,
+    benchmark: str,
+    path: str,
+) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """Validate the exact tokenizer-result partition of configured aliases.
+
+    Canonical release artifacts reject deduplicated aliases. Although merging
+    aliases with the same token ID is harmless for a set-valued query, it makes
+    a nominal alias-weighted estimator silently model-dependent.
+
+    Returns:
+        Accepted and rejected alias sets keyed by label.
+    """
+    canonical: dict[str, dict[str, str]] = _canonical_layer_aliases(benchmark)
+    if not isinstance(label_metadata, dict) or set(label_metadata) != set(canonical):
+        raise ValueError(f"Layer label metadata disagrees in {path}")
+
+    expected_detail_fields: frozenset[str] = frozenset(
+        {
+            "accepted_single_token_aliases",
+            "deduplicated_single_token_aliases",
+            "rejected_multitoken_aliases",
+        }
+    )
+    accepted_by_label: dict[str, set[str]] = {}
+    rejected_by_label: dict[str, set[str]] = {}
+    accepted_token_owner: dict[int, tuple[str, str]] = {}
+    has_deduplicated_aliases: bool = False
+    for label, expected_aliases in canonical.items():
+        details: Any = label_metadata.get(label)
+        if not isinstance(details, dict) or set(details) != expected_detail_fields:
+            raise ValueError(f"Layer alias metadata fields disagree in {path}")
+        accepted: Any = details["accepted_single_token_aliases"]
+        deduplicated: Any = details["deduplicated_single_token_aliases"]
+        rejected: Any = details["rejected_multitoken_aliases"]
+        if not all(
+            isinstance(values, list) for values in (accepted, deduplicated, rejected)
+        ):
+            raise ValueError(f"Layer alias metadata partition is malformed in {path}")
+        if not accepted:
+            raise ValueError(f"Layer label {label!r} has no accepted aliases in {path}")
+
+        observed_aliases: dict[str, tuple[str, str]] = {}
+        accepted_aliases: set[str] = set()
+        accepted_ids: dict[str, int] = {}
+        for item in accepted:
+            if not isinstance(item, dict) or set(item) != {
+                "alias",
+                "surface",
+                "token_id",
+            }:
+                raise ValueError(f"Accepted layer aliases are malformed in {path}")
+            alias: Any = item.get("alias")
+            surface: Any = item.get("surface")
+            token_id: Any = item.get("token_id")
+            if (
+                not isinstance(alias, str)
+                or not isinstance(surface, str)
+                or not _is_token_id(token_id)
+                or alias in observed_aliases
+            ):
+                raise ValueError(f"Accepted layer aliases are malformed in {path}")
+            observed_aliases[alias] = (surface, "accepted")
+            accepted_aliases.add(alias)
+            accepted_ids[alias] = token_id
+            previous_owner: tuple[str, str] | None = accepted_token_owner.get(token_id)
+            if previous_owner is not None:
+                raise ValueError(
+                    f"Accepted layer token ID {token_id} is shared by "
+                    f"{previous_owner} and {(label, alias)} in {path}"
+                )
+            accepted_token_owner[token_id] = (label, alias)
+
+        for item in deduplicated:
+            if not isinstance(item, dict) or set(item) != {
+                "alias",
+                "surface",
+                "token_id",
+                "duplicate_of_alias",
+            }:
+                raise ValueError(f"Deduplicated layer aliases are malformed in {path}")
+            alias = item.get("alias")
+            surface = item.get("surface")
+            token_id = item.get("token_id")
+            duplicate_of: Any = item.get("duplicate_of_alias")
+            if (
+                not isinstance(alias, str)
+                or not isinstance(surface, str)
+                or not _is_token_id(token_id)
+                or not isinstance(duplicate_of, str)
+                or duplicate_of not in accepted_ids
+                or token_id != accepted_ids[duplicate_of]
+                or alias in observed_aliases
+            ):
+                raise ValueError(f"Deduplicated layer aliases are malformed in {path}")
+            observed_aliases[alias] = (surface, "deduplicated")
+            has_deduplicated_aliases = True
+
+        rejected_aliases: set[str] = set()
+        for item in rejected:
+            if not isinstance(item, dict) or set(item) != {
+                "alias",
+                "surface",
+                "token_ids",
+            }:
+                raise ValueError(f"Rejected layer aliases are malformed in {path}")
+            alias = item.get("alias")
+            surface = item.get("surface")
+            token_ids: Any = item.get("token_ids")
+            if (
+                not isinstance(alias, str)
+                or not isinstance(surface, str)
+                or not isinstance(token_ids, list)
+                or len(token_ids) == 1
+                or not all(_is_token_id(token_id) for token_id in token_ids)
+                or alias in observed_aliases
+            ):
+                raise ValueError(f"Rejected layer aliases are malformed in {path}")
+            observed_aliases[alias] = (surface, "rejected")
+            rejected_aliases.add(alias)
+
+        observed_surfaces: dict[str, str] = {
+            alias: surface for alias, (surface, _status) in observed_aliases.items()
+        }
+        if observed_surfaces != expected_aliases:
+            raise ValueError(f"Layer alias metadata partition disagrees in {path}")
+        accepted_by_label[label] = accepted_aliases
+        rejected_by_label[label] = rejected_aliases
+
+    if has_deduplicated_aliases:
+        raise ValueError(
+            f"Canonical layer release cannot contain deduplicated aliases in {path}"
+        )
+    return accepted_by_label, rejected_by_label
+
+
+def _validate_ordinary_layer_token_grid(
+    tokens: pd.DataFrame,
+    final: pd.DataFrame,
+    benchmark: str,
+    accepted_by_label: dict[str, set[str]],
+    rejected_by_label: dict[str, set[str]],
+    path: str,
+) -> pd.DataFrame:
+    """Require the exact observation-by-canonical-alias ordinary token grid."""
+    canonical: dict[str, dict[str, str]] = _canonical_layer_aliases(benchmark)
+    checked: pd.DataFrame = tokens.copy()
+    checked["prompt_idx"] = pd.to_numeric(checked["prompt_idx"], errors="raise")
+    if (checked["prompt_idx"] % 1 != 0).any():
+        raise ValueError(f"Ordinary token prompt indices are invalid in {path}")
+    checked["prompt_idx"] = checked["prompt_idx"].astype(int)
+    numeric_segments: pd.Series = pd.to_numeric(checked["seg_idx"], errors="coerce")
+    if (numeric_segments.dropna() % 1 != 0).any():
+        raise ValueError(f"Ordinary token segment indices are invalid in {path}")
+    checked["seg_key"] = numeric_segments.fillna(-1).astype(int)
+    if checked[["kind", "label", "token"]].isna().any().any():
+        raise ValueError(f"Ordinary token identities are missing in {path}")
+    checked["logprob"] = pd.to_numeric(checked["logprob"], errors="raise")
+
+    identity: list[str] = ["prompt_idx", "seg_key", "kind"]
+    alias_identity: list[str] = [*identity, "label", "token"]
+    if checked.duplicated(alias_identity).any():
+        raise ValueError(f"Ordinary token grid has duplicate cells in {path}")
+    canonical_pairs: set[tuple[str, str]] = {
+        (label, alias) for label, aliases in canonical.items() for alias in aliases
+    }
+    observed_pairs: set[tuple[str, str]] = set(
+        zip(checked["label"].astype(str), checked["token"].astype(str))
+    )
+    if observed_pairs != canonical_pairs:
+        raise ValueError(f"Ordinary token alias grid disagrees in {path}")
+
+    final_observations: set[tuple[int, int, str]] = set(
+        zip(
+            final["prompt_idx"].astype(int),
+            final["seg_key"].astype(int),
+            final["kind"].astype(str),
+        )
+    )
+    if len(final_observations) != len(final):
+        raise ValueError(f"Final layer has duplicate observations for {path}")
+    token_observations: set[tuple[int, int, str]] = set(
+        zip(
+            checked["prompt_idx"],
+            checked["seg_key"],
+            checked["kind"].astype(str),
+        )
+    )
+    counts: pd.Series = checked.groupby(identity, dropna=False).size()
+    if (
+        token_observations != final_observations
+        or len(counts) != len(final_observations)
+        or not counts.eq(len(canonical_pairs)).all()
+    ):
+        raise ValueError(f"Ordinary token observation grid disagrees in {path}")
+
+    accepted_pairs: set[tuple[str, str]] = {
+        (label, alias)
+        for label, aliases in accepted_by_label.items()
+        for alias in aliases
+    }
+    rejected_pairs: set[tuple[str, str]] = {
+        (label, alias)
+        for label, aliases in rejected_by_label.items()
+        for alias in aliases
+    }
+    row_pairs: list[tuple[str, str]] = list(
+        zip(checked["label"].astype(str), checked["token"].astype(str))
+    )
+    accepted_mask: np.ndarray = np.asarray(
+        [pair in accepted_pairs for pair in row_pairs], dtype=bool
+    )
+    rejected_mask: np.ndarray = np.asarray(
+        [pair in rejected_pairs for pair in row_pairs], dtype=bool
+    )
+    if not np.isfinite(
+        checked.loc[accepted_mask, "logprob"].to_numpy(dtype=float)
+    ).all():
+        raise ValueError(f"Accepted ordinary alias logprobs must be finite in {path}")
+    if not checked.loc[rejected_mask, "logprob"].isna().all():
+        raise ValueError(f"Rejected ordinary alias logprobs must be missing in {path}")
+    return checked
+
+
+def _validate_layer_run_sidecar(
+    path: str,
+    layer_path: str,
+    manifest_path: str,
+    frame: pd.DataFrame,
+    benchmark: str,
+    pregrouper: str,
+    model: str,
+) -> None:
+    """Validate one canonical layer-run record and all bound identities."""
+    with open(path, encoding="utf-8") as source:
+        metadata: Any = json.load(source)
+    if not isinstance(metadata, dict) or set(metadata) != LAYER_RUN_FIELDS:
+        raise ValueError(f"Layer run metadata fields disagree in {path}")
+    expected_identity: dict[str, Any] = {
+        "schema_version": 1,
+        "benchmark": benchmark,
+        "pregrouper": pregrouper,
+        "model": model,
+        "segmentation_scope": "full_dialog_in_message_order",
+        "source_hash_timing": "run_start",
+        "model_artifact_hash_timing": "pre_model_load",
+    }
+    if any(metadata.get(field) != value for field, value in expected_identity.items()):
+        raise ValueError(f"Layer run identity disagrees in {path}")
+
+    artifact: Any = metadata.get("artifact")
+    if not isinstance(artifact, dict) or artifact != {
+        "filename": os.path.basename(layer_path),
+        "rows": len(frame),
+        "sha256": _sha256(layer_path),
+    }:
+        raise ValueError(f"Layer artifact identity disagrees in {path}")
+    if metadata.get("manifest_sha256") != _sha256(manifest_path):
+        raise ValueError(f"Layer manifest identity disagrees in {path}")
+
+    parameters: Any = metadata.get("parameters")
+    if (
+        not isinstance(parameters, dict)
+        or set(parameters) != LAYER_PARAMETER_FIELDS
+        or parameters.get("rendered_chat_add_special_tokens") is not False
+        or parameters.get("attention_implementation") != "sdpa"
+        or parameters.get("canary") is not False
+        or parameters.get("device_map") != "auto"
+        or parameters.get("max_samples") is not None
+        or parameters.get("seed") != 42
+        or parameters.get("batch_size") != 32
+        or parameters.get("torch_dtype") != "bfloat16"
+    ):
+        raise ValueError(f"Layer run parameters disagree in {path}")
+
+    identity_payload: dict[str, Any] = dict(metadata)
+    identity_payload["execution_model_source"] = metadata.get("model_source")
+    _validate_open_model_identity(identity_payload, model, path)
+    ordinary_path: str = os.path.join(os.path.dirname(path), f"{model}_run.json")
+    if not os.path.isfile(ordinary_path):
+        raise FileNotFoundError(
+            f"Missing ordinary run identity for layer artifact: {ordinary_path}"
+        )
+    with open(ordinary_path, encoding="utf-8") as source:
+        ordinary: Any = json.load(source)
+    identity_fields: tuple[str, ...] = (
+        "model_source",
+        "model_revision",
+        "model_artifact_manifest_sha256",
+        "model_artifact_sha256",
+        "model_identity_files_sha256",
+    )
+    if not isinstance(ordinary, dict) or any(
+        ordinary.get(field) != metadata.get(field) for field in identity_fields
+    ):
+        raise ValueError(f"Layer and ordinary model identities disagree in {path}")
+
+    spec = BENCHMARKS[benchmark]
+    expected_prompts: int = int(
+        frame.loc[frame["kind"] == "orig", "prompt_idx"].nunique()
+    )
+    dataset: Any = metadata.get("dataset")
+    if (
+        not isinstance(dataset, dict)
+        or set(dataset) != LAYER_DATASET_FIELDS
+        or dataset.get("hf_path") != spec.hf_dataset_path
+        or dataset.get("hf_name") != spec.hf_dataset_name
+        or dataset.get("hf_split") != spec.hf_split
+        or dataset.get("snapshot_filename") != GOLD_DATASET_FILES[benchmark]
+        or dataset.get("snapshot_sha256") != GOLD_DATASET_SHA256[benchmark]
+        or dataset.get("prompts") != expected_prompts
+        or LOWERCASE_SHA256_RE.fullmatch(
+            str(dataset.get("normalized_frame_sha256", ""))
+        )
+        is None
+    ):
+        raise ValueError(f"Layer dataset identity disagrees in {path}")
+
+    slots: Any = metadata.get("layer_slots")
+    if not isinstance(slots, dict) or slots != {
+        "count": int(frame["layer_slot"].nunique()),
+        "convention": (
+            "slot 0 is the embedding output; slot k+1 is decoder block k "
+            "output; final norm is applied before all scores"
+        ),
+    }:
+        raise ValueError(f"Layer-slot metadata disagrees in {path}")
+    label_metadata: Any = metadata.get("labels")
+    _validate_layer_alias_metadata(label_metadata, benchmark, path)
+    if metadata.get("alignment") != {
+        "direction": (
+            "uniform sum of accepted label unembedding rows; each unordered "
+            "contrast follows configured label order"
+        ),
+        "multi_alias_status": (
+            "diagnostic approximation to grouped-logsumexp attribution"
+        ),
+    } or metadata.get("label_score_definition") != (
+        "intermediate slots store logsumexp of accepted alias logits; the final "
+        "slot stores logsumexp of the model's native-dtype full-head "
+        "log-probabilities to match ordinary outputs; pairwise differences are "
+        "grouped-label log-probability contrasts"
+    ):
+        raise ValueError(f"Layer scoring metadata disagrees in {path}")
+
+    software: Any = metadata.get("software")
+    if (
+        not isinstance(software, dict)
+        or set(software) != LAYER_SOFTWARE_FIELDS
+        or any(
+            value is not None
+            and (
+                not isinstance(value, str) or not value or "/" in value or "\\" in value
+            )
+            for value in software.values()
+        )
+    ):
+        raise ValueError(f"Layer software metadata disagrees in {path}")
+    source_hashes: Any = metadata.get("source_sha256")
+    repository_root: str = os.path.dirname(os.path.dirname(__file__))
+    expected_source_hashes: dict[str, str] = {
+        relative: _sha256(os.path.join(repository_root, relative))
+        for relative in LAYER_EXECUTION_SOURCE_FILES
+    }
+    if source_hashes != expected_source_hashes:
+        raise ValueError(f"Layer execution source hashes disagree in {path}")
+
+
+def _validate_layer_artifact(
+    results_dir: str,
+    benchmark: str,
+    pregrouper: str,
+    model: str,
+) -> None:
+    """Validate one layer artifact against its canonical segment grid."""
+    config_dir: str = os.path.join(results_dir, benchmark, pregrouper)
+    layer_path: str = os.path.join(config_dir, f"{model}_layers.tsv.gz")
+    run_path: str = os.path.join(config_dir, f"{model}_layers_run.json")
+    manifest_path: str = os.path.join(config_dir, "segments.tsv.gz")
+    for required_path in (layer_path, run_path, manifest_path):
+        if not os.path.isfile(required_path):
+            raise FileNotFoundError(
+                f"Missing canonical layer artifact: {required_path}"
+            )
+    frame: pd.DataFrame = pd.read_csv(layer_path, sep="\t")
+    expected_columns: set[str] = _layer_artifact_columns(benchmark)
+    if set(frame.columns) != expected_columns:
+        raise ValueError(
+            f"Layer artifact columns disagree in {layer_path}: "
+            f"missing={sorted(expected_columns - set(frame.columns))}, "
+            f"extra={sorted(set(frame.columns) - expected_columns)}"
+        )
+    eval_config = BENCHMARKS[benchmark].eval_config
+    if eval_config is None:
+        raise ValueError(f"Layerwise benchmark {benchmark!r} has no label config")
+    labels: tuple[str, ...] = tuple(eval_config.label_tokens)
+    positive, negative = _layer_contrast_labels(
+        benchmark,
+        "entailment_contradiction" if benchmark.startswith("anli_") else "canonical",
+    )
+    checked: pd.DataFrame = _validate_layer_frame(frame, layer_path, positive, negative)
+    manifest, manifest_keys = _validate_manifest(manifest_path)
+    _validate_gold_manifest(benchmark, pregrouper, manifest_path, manifest)
+    _validate_layer_manifest_coverage(
+        checked,
+        pd.MultiIndex.from_frame(manifest[["prompt_idx", "seg_idx"]]),
+        layer_path,
+    )
+    slot_count: int = int(checked["layer_slot"].nunique())
+    expected_rows: int = slot_count * (
+        int(manifest["prompt_idx"].nunique()) + len(manifest_keys)
+    )
+    if len(checked) != expected_rows:
+        raise ValueError(f"Layer artifact row matrix is incomplete in {layer_path}")
+
+    scalar_columns: list[str] = [
+        f"label_score_{label_column_alias(label)}" for label in labels
+    ]
+    for first, second in itertools.combinations(labels, 2):
+        suffix: str = f"{label_column_alias(first)}_vs_{label_column_alias(second)}"
+        scalar_columns.extend(
+            [
+                f"w_dot_delta_z_postnorm_{suffix}",
+                f"w_norm_{suffix}",
+            ]
+        )
+    ablated: pd.Series = checked["kind"].eq("ablated")
+    originals: pd.Series = ~ablated
+    label_columns: list[str] = [
+        column for column in scalar_columns if column.startswith("label_score_")
+    ]
+    delta_columns: list[str] = [
+        "delta_norm_postnorm",
+        *(column for column in scalar_columns if column.startswith("w_dot_delta_")),
+    ]
+    norm_columns: list[str] = [
+        column for column in scalar_columns if column.startswith("w_norm_")
+    ]
+    if (
+        not np.isfinite(checked[label_columns].to_numpy(dtype=float)).all()
+        or not np.isfinite(
+            checked.loc[ablated, delta_columns].to_numpy(dtype=float)
+        ).all()
+        or checked.loc[originals, delta_columns].notna().any().any()
+        or not np.isfinite(checked[norm_columns].to_numpy(dtype=float)).all()
+        or (checked.loc[ablated, "delta_norm_postnorm"] < 0).any()
+        or (checked[norm_columns] <= 0).any().any()
+        or any(checked[column].nunique(dropna=False) != 1 for column in norm_columns)
+    ):
+        raise ValueError(
+            f"Layer scalar values are incomplete or invalid in {layer_path}"
+        )
+
+    expected_answers: pd.Series = checked["prompt_idx"].map(
+        manifest.groupby("prompt_idx")["answer"].first()
+    )
+    if not checked["answer"].eq(expected_answers).all():
+        raise ValueError(f"Layer answers disagree with the manifest in {layer_path}")
+    _validate_layer_run_sidecar(
+        run_path,
+        layer_path,
+        manifest_path,
+        checked,
+        benchmark,
+        pregrouper,
+        model,
+    )
+
+
+def _finite_logsumexp(values: pd.Series) -> float:
+    """Compute a stable log-sum-exp and reject unavailable open-model cells."""
+    array: np.ndarray = values.to_numpy(dtype=float)
+    if len(array) == 0 or not np.isfinite(array).all():
+        raise ValueError("final-layer comparison requires finite token logprobs")
+    maximum: float = float(array.max())
+    return maximum + float(np.log(np.exp(array - maximum).sum()))
+
+
+def _validate_layer_final_readout(
+    results_dir: str,
+    benchmark: str,
+    pregrouper: str,
+    model: str,
+) -> dict[str, float]:
+    """Require every final-block label contrast to match ordinary scoring.
+
+    The two paths use the same rendered inputs, ordering, model,
+    full-vocabulary output head, and native-dtype log-softmax. A small tolerance
+    covers independent BF16 batches, grouped reduction, and TSV round-tripping.
+    """
+    directory: str = os.path.join(results_dir, benchmark, pregrouper)
+    layer_path: str = os.path.join(directory, f"{model}_layers.tsv.gz")
+    run_path: str = os.path.join(directory, f"{model}_layers_run.json")
+    token_path: str = os.path.join(directory, f"{model}_tokens.tsv.gz")
+    for path in (layer_path, run_path, token_path):
+        if not os.path.isfile(path):
+            raise FileNotFoundError(path)
+    layer: pd.DataFrame = pd.read_csv(layer_path, sep="\t")
+    tokens: pd.DataFrame = pd.read_csv(
+        token_path,
+        sep="\t",
+        dtype={"kind": str, "label": str, "token": str},
+    )
+    with open(run_path, encoding="utf-8") as source:
+        metadata: Any = json.load(source)
+    label_metadata: Any = metadata.get("labels") if isinstance(metadata, dict) else None
+    aliases_by_label, rejected_by_label = _validate_layer_alias_metadata(
+        label_metadata, benchmark, run_path
+    )
+
+    final_slot: int = int(pd.to_numeric(layer["layer_slot"], errors="raise").max())
+    final: pd.DataFrame = layer[layer["layer_slot"] == final_slot].copy()
+    final["seg_key"] = final["seg_idx"].fillna(-1).astype(int)
+    required_token_columns: set[str] = {
+        "prompt_idx",
+        "seg_idx",
+        "kind",
+        "label",
+        "token",
+        "logprob",
+    }
+    if not required_token_columns.issubset(tokens.columns):
+        raise ValueError(f"Ordinary token columns are incomplete in {token_path}")
+    tokens = _validate_ordinary_layer_token_grid(
+        tokens,
+        final,
+        benchmark,
+        aliases_by_label,
+        rejected_by_label,
+        token_path,
+    )
+
+    selected_parts: list[pd.DataFrame] = []
+    for label, aliases in aliases_by_label.items():
+        selected_parts.append(
+            tokens[(tokens["label"] == label) & tokens["token"].isin(aliases)]
+        )
+    selected: pd.DataFrame = pd.concat(selected_parts, ignore_index=True)
+    selected["logprob"] = pd.to_numeric(selected["logprob"], errors="raise")
+    selected["seg_key"] = selected["seg_idx"].fillna(-1).astype(int)
+    grouped: pd.DataFrame = (
+        selected.groupby(
+            ["prompt_idx", "seg_key", "kind", "label"],
+            sort=False,
+        )["logprob"]
+        .apply(_finite_logsumexp)
+        .unstack("label")
+        .reset_index()
+    )
+    errors: dict[str, float] = {}
+    identity: list[str] = ["prompt_idx", "seg_key", "kind"]
+    for positive, negative in itertools.combinations(aliases_by_label, 2):
+        if positive not in grouped or negative not in grouped:
+            raise ValueError(
+                f"Ordinary labels for {positive}/{negative} are incomplete in {token_path}"
+            )
+        positive_column: str = f"label_score_{label_column_alias(positive)}"
+        negative_column: str = f"label_score_{label_column_alias(negative)}"
+        if positive_column not in final or negative_column not in final:
+            raise ValueError(f"Final layer contrast is missing in {layer_path}")
+        layer_signal: pd.DataFrame = final[
+            [*identity, positive_column, negative_column]
+        ].copy()
+        layer_signal["layer_contrast"] = (
+            layer_signal[positive_column] - layer_signal[negative_column]
+        )
+        reference: pd.DataFrame = grouped[[*identity, positive, negative]].copy()
+        reference["ordinary_contrast"] = reference[positive] - reference[negative]
+        compared: pd.DataFrame = layer_signal.merge(
+            reference[[*identity, "ordinary_contrast"]],
+            on=identity,
+            how="inner",
+            validate="one_to_one",
+        )
+        if len(compared) != len(final):
+            raise ValueError(
+                f"Final-layer/ordinary coverage mismatch in {layer_path}: "
+                f"{len(compared)} != {len(final)}"
+            )
+        difference: np.ndarray = np.abs(
+            compared["layer_contrast"].to_numpy(dtype=float)
+            - compared["ordinary_contrast"].to_numpy(dtype=float)
+        )
+        maximum: float = float(difference.max())
+        name: str = f"{positive}_minus_{negative}"
+        errors[name] = maximum
+        if not np.isfinite(maximum) or maximum > MAX_LAYER_FINAL_CONTRAST_ABS_ERROR:
+            raise ValueError(
+                f"Final-layer contrast {name} disagrees with ordinary scoring in "
+                f"{layer_path}: max_abs_error={maximum:.9g}, "
+                f"limit={MAX_LAYER_FINAL_CONTRAST_ABS_ERROR:.9g}"
+            )
+    return errors
+
+
+def _validate_layer_artifacts(results_dir: str) -> None:
+    """Require the complete canonical configuration-by-open-model matrix."""
+    if not set(LAYERWISE_CONFIGS).issubset(set(DEFAULT_BENCHMARK_CONFIGS)):
+        raise ValueError("Layerwise configurations are outside the canonical grid")
+    for benchmark, pregrouper in LAYERWISE_CONFIGS:
+        for model in OPEN_MODELS:
+            _validate_layer_artifact(results_dir, benchmark, pregrouper, model)
+            _validate_layer_final_readout(results_dir, benchmark, pregrouper, model)
 
 
 def _allowed_release_files(cohort: str) -> set[str]:
@@ -2055,7 +2867,12 @@ def _allowed_release_files(cohort: str) -> set[str]:
         if cohort == "paper" and benchmark == "lambada":
             for model in RELEASE_LAMBADA_CANARY_MODELS:
                 allowed.add(f"{prefix}/{model}_canary.json")
-    for table in derived_tables:
+    for benchmark, pregrouper in LAYERWISE_CONFIGS:
+        prefix = f"{benchmark}/{pregrouper}"
+        for model in OPEN_MODELS:
+            allowed.add(f"{prefix}/{model}_layers.tsv.gz")
+            allowed.add(f"{prefix}/{model}_layers_run.json")
+    for table in (*derived_tables, *RELEASE_LAYERWISE_DERIVED_TABLES):
         allowed.add(table)
         allowed.add(f"{table}.provenance.json")
     return allowed
@@ -2268,6 +3085,9 @@ def _validate_derived_sidecar(
     generator_module: str,
     benchmark_configs: list[tuple[str, str]],
     models: tuple[str, ...],
+    *,
+    expected_input_paths: dict[str, str] | None = None,
+    supporting_source_files: tuple[str, ...] = DERIVED_SUPPORTING_SOURCE_FILES,
 ) -> dict[str, Any]:
     """Verify that a derived table is sealed to all shipped raw inputs."""
     sidecar_path: str = f"{output_path}.provenance.json"
@@ -2315,16 +3135,17 @@ def _validate_derived_sidecar(
             "sha256": _sha256(os.path.join(repository_root, relative_path)),
             "size_bytes": os.path.getsize(os.path.join(repository_root, relative_path)),
         }
-        for relative_path in DERIVED_SUPPORTING_SOURCE_FILES
+        for relative_path in supporting_source_files
     }
     if supporting != expected_supporting:
         raise ValueError(f"Derived supporting-source seal disagrees in {sidecar_path}")
 
-    expected_input_paths: dict[str, str] = {}
-    for benchmark, pregrouper in benchmark_configs:
-        expected_input_paths.update(
-            collect_result_inputs(results_dir, benchmark, pregrouper, {}, models)
-        )
+    if expected_input_paths is None:
+        expected_input_paths = {}
+        for benchmark, pregrouper in benchmark_configs:
+            expected_input_paths.update(
+                collect_result_inputs(results_dir, benchmark, pregrouper, {}, models)
+            )
     inputs: Any = payload.get("inputs")
     if not isinstance(inputs, dict) or set(inputs) != set(expected_input_paths):
         raise ValueError(f"Derived input set disagrees in {sidecar_path}")
@@ -2375,6 +3196,25 @@ def _validate_f_table_parameters(
         (str(item["benchmark"]), str(item["pregrouper"]))
         for item in parameters.get("benchmark_configs", [])
     }
+    resolved_jobs_value: Any = parameters.get("resolved_jobs")
+    resolved_jobs: list[tuple[str, str, str, str]] = (
+        [
+            (
+                str(item["benchmark"]),
+                str(item["pregrouper"]),
+                str(item["scope"]),
+                str(item["contrast"]),
+            )
+            for item in resolved_jobs_value
+        ]
+        if isinstance(resolved_jobs_value, list)
+        and all(
+            isinstance(item, dict)
+            and set(item) == {"benchmark", "pregrouper", "scope", "contrast"}
+            for item in resolved_jobs_value
+        )
+        else []
+    )
     expected_scopes: set[str] = {scope for _, _, scope, _ in expected_configs}
     expected_contrasts: set[str] = (
         {"canonical"}
@@ -2403,12 +3243,15 @@ def _validate_f_table_parameters(
     expected_parameter_fields: set[str] = {
         "benchmark_configs",
         "contrasts",
+        "resolved_jobs",
         "scopes",
         *expected_values,
     }
     if (
         set(parameters) != expected_parameter_fields
         or recorded_benchmarks != expected_benchmarks
+        or len(resolved_jobs) != len(expected_configs)
+        or set(resolved_jobs) != expected_configs
         or set(parameters.get("scopes", [])) != expected_scopes
         or set(parameters.get("contrasts", [])) != expected_contrasts
         or any(parameters.get(key) != value for key, value in expected_values.items())
@@ -2625,14 +3468,11 @@ def _require_pair_grid(
             return config_t in unsupported_attribution_configs
         return False
 
-    readout_mismatch_rows: pd.Series = frame["contrast"].eq(
-        "entailment_contradiction"
-    ) & frame["metric"].isin({"F_align", "F_align_to_attr"})
     unsupported_rows: pd.Series = frame.apply(_unsupported_row, axis=1)
     points: pd.Series = pd.to_numeric(frame["f_point"], errors="coerce")
     lows: pd.Series = pd.to_numeric(frame["f_lo"], errors="coerce")
     highs: pd.Series = pd.to_numeric(frame["f_hi"], errors="coerce")
-    unavailable_rows: pd.Series = unsupported_rows | readout_mismatch_rows
+    unavailable_rows: pd.Series = unsupported_rows
     if not (
         points[unavailable_rows].isna().all()
         and lows[unavailable_rows].isna().all()
@@ -2645,13 +3485,6 @@ def _require_pair_grid(
         .all()
     ):
         raise ValueError(f"{path} reports estimates for unsupported model outputs")
-    if (
-        not frame.loc[readout_mismatch_rows, "unavailable_reason"]
-        .astype(str)
-        .eq("readout_contrast_mismatch")
-        .all()
-    ):
-        raise ValueError(f"{path} does not label readout-contrast mismatches")
     estimable: pd.Series = ~unavailable_rows
     if not (
         observation_coverage[estimable].between(0.0, 1.0).all()
@@ -2716,6 +3549,336 @@ def _require_pair_grid(
                 raise ValueError(f"{path} changes prompt-level F_pred by scope")
 
 
+def _layerwise_derived_inputs(results_dir: str) -> dict[str, str]:
+    """Return the exact raw inputs sealed by the canonical layer analysis."""
+    inputs: dict[str, str] = {}
+    for benchmark, pregrouper in LAYERWISE_CONFIGS:
+        prefix: str = f"{benchmark}/{pregrouper}"
+        config_dir: str = os.path.join(results_dir, benchmark, pregrouper)
+        inputs[f"{prefix}/segments"] = os.path.join(config_dir, "segments.tsv.gz")
+        for model in OPEN_MODELS:
+            inputs[f"{prefix}/{model}/layers"] = os.path.join(
+                config_dir, f"{model}_layers.tsv.gz"
+            )
+            inputs[f"{prefix}/{model}/layers_run"] = os.path.join(
+                config_dir, f"{model}_layers_run.json"
+            )
+    return inputs
+
+
+def _validate_layerwise_endpoint_consistency(
+    layerwise: pd.DataFrame,
+    ordinary: pd.DataFrame,
+    layerwise_path: str,
+    ordinary_path: str,
+) -> None:
+    """Require final-depth layer estimates to reproduce the ordinary F-table."""
+    identity: list[str] = [
+        "benchmark",
+        "pregrouper",
+        "scope",
+        "contrast",
+        "model_s",
+        "model_t",
+        "metric",
+        "statistic",
+    ]
+    endpoint: pd.DataFrame = layerwise[
+        pd.to_numeric(layerwise["relative_depth"], errors="coerce").eq(1.0)
+    ].copy()
+    layer_configs: set[tuple[str, str]] = set(LAYERWISE_CONFIGS)
+    ordinary_configs: pd.Series = pd.Series(
+        list(zip(ordinary["benchmark"], ordinary["pregrouper"])),
+        index=ordinary.index,
+    ).isin(layer_configs)
+    ordinary_open: pd.DataFrame = ordinary[
+        ordinary_configs
+        & ordinary["scope"].eq("user")
+        & ordinary["metric"].isin(("F_pred", "F_attr"))
+        & ordinary["model_s"].isin(OPEN_MODELS)
+        & ordinary["model_t"].isin(OPEN_MODELS)
+    ].copy()
+    if endpoint.empty or ordinary_open.empty:
+        raise ValueError(
+            f"Layerwise/F-table endpoint comparison is empty for "
+            f"{layerwise_path} and {ordinary_path}"
+        )
+    if endpoint.duplicated(identity).any() or ordinary_open.duplicated(identity).any():
+        raise ValueError(
+            f"Layerwise/F-table endpoint comparison has duplicate keys in "
+            f"{layerwise_path} or {ordinary_path}"
+        )
+    endpoint_keys: set[tuple[str, ...]] = set(
+        endpoint[identity].astype(str).itertuples(index=False, name=None)
+    )
+    ordinary_keys: set[tuple[str, ...]] = set(
+        ordinary_open[identity].astype(str).itertuples(index=False, name=None)
+    )
+    if endpoint_keys != ordinary_keys:
+        raise ValueError(
+            f"Layerwise/F-table endpoint keys disagree between {layerwise_path} "
+            f"and {ordinary_path}"
+        )
+
+    comparison_columns: tuple[str, ...] = (
+        "f_point",
+        "n_observations",
+        "expected_observations",
+        "observation_coverage",
+        "n_prompts",
+        "expected_prompts",
+        "prompt_coverage",
+    )
+    compared: pd.DataFrame = endpoint[[*identity, *comparison_columns]].merge(
+        ordinary_open[[*identity, *comparison_columns]],
+        on=identity,
+        how="inner",
+        suffixes=("_layerwise", "_ordinary"),
+        validate="one_to_one",
+    )
+    count_columns: tuple[str, ...] = (
+        "n_observations",
+        "expected_observations",
+        "n_prompts",
+        "expected_prompts",
+    )
+    for column in count_columns:
+        layer_values: pd.Series = pd.to_numeric(
+            compared[f"{column}_layerwise"], errors="coerce"
+        )
+        ordinary_values: pd.Series = pd.to_numeric(
+            compared[f"{column}_ordinary"], errors="coerce"
+        )
+        if layer_values.isna().any() or not layer_values.eq(ordinary_values).all():
+            raise ValueError(
+                f"Layerwise endpoint {column} disagrees with {ordinary_path}"
+            )
+    for column in ("observation_coverage", "prompt_coverage"):
+        layer_values = pd.to_numeric(compared[f"{column}_layerwise"], errors="coerce")
+        ordinary_values = pd.to_numeric(compared[f"{column}_ordinary"], errors="coerce")
+        if not np.array_equal(
+            layer_values.to_numpy(dtype=float), ordinary_values.to_numpy(dtype=float)
+        ):
+            raise ValueError(
+                f"Layerwise endpoint {column} disagrees with {ordinary_path}"
+            )
+    layer_points: np.ndarray = pd.to_numeric(
+        compared["f_point_layerwise"], errors="coerce"
+    ).to_numpy(dtype=float)
+    ordinary_points: np.ndarray = pd.to_numeric(
+        compared["f_point_ordinary"], errors="coerce"
+    ).to_numpy(dtype=float)
+    absolute_errors: np.ndarray = np.abs(layer_points - ordinary_points)
+    limits: np.ndarray = np.where(
+        compared["statistic"].eq("spearman").to_numpy(),
+        MAX_LAYER_FINAL_SPEARMAN_ABS_ERROR,
+        MAX_LAYER_FINAL_CONTRAST_ABS_ERROR,
+    )
+    invalid: np.ndarray = (
+        ~np.isfinite(layer_points)
+        | ~np.isfinite(ordinary_points)
+        | (absolute_errors > limits)
+    )
+    if invalid.any():
+        invalid_indices: np.ndarray = np.flatnonzero(invalid)
+        worst_index: int = int(
+            invalid_indices[
+                np.argmax(absolute_errors[invalid_indices] / limits[invalid_indices])
+            ]
+        )
+        raise ValueError(
+            f"Layerwise endpoint point estimates disagree with {ordinary_path}: "
+            f"statistic={compared.iloc[worst_index]['statistic']}, "
+            f"abs_error={absolute_errors[worst_index]:.9g}, "
+            f"limit={limits[worst_index]:.9g}"
+        )
+
+
+def _validate_layerwise_derived_output(
+    results_dir: str, ordinary_f_table_path: str
+) -> None:
+    """Validate the canonical matched-relative-depth fidelity table."""
+    path: str = os.path.join(results_dir, RELEASE_LAYERWISE_DERIVED_TABLES[0])
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"Missing derived result table: {path}")
+    frame: pd.DataFrame = pd.read_csv(path, sep="\t")
+    required_columns: set[str] = {
+        "aggregation",
+        "availability_status",
+        "benchmark",
+        "cohort",
+        "contrast",
+        "depth_alignment",
+        "embedding_slot_included",
+        "expected_observations",
+        "expected_prompts",
+        "f_hi",
+        "f_lo",
+        "f_point",
+        "metric",
+        "model_s",
+        "model_t",
+        "n_observations",
+        "n_prompts",
+        "observation_coverage",
+        "pair_population",
+        "pregrouper",
+        "prompt_coverage",
+        "readout_contrast",
+        "relative_depth",
+        "relative_depth_grid_size",
+        "relative_depth_index",
+        "requested_contrast",
+        "requested_scope",
+        "resolved_scope",
+        "resolved_source_contrast",
+        "resolved_target_contrast",
+        "scope",
+        "source_num_blocks",
+        "statistic",
+        "target_num_blocks",
+        "unavailable_reason",
+    }
+    if set(frame.columns) != required_columns:
+        raise ValueError(f"{path} has an incorrect layerwise result schema")
+
+    depth_grid_size: int = 21
+    expected_keys: set[tuple[str, str, str, str, str, str, int]] = {
+        (
+            benchmark,
+            pregrouper,
+            source,
+            target,
+            metric,
+            statistic,
+            depth_index,
+        )
+        for benchmark, pregrouper in LAYERWISE_CONFIGS
+        for source, target in itertools.combinations(OPEN_MODELS, 2)
+        for metric in ("F_pred", "F_attr")
+        for statistic in ("spearman", "pearson_r", "pearson_r2")
+        for depth_index in range(depth_grid_size)
+    }
+    actual_keys: set[tuple[str, str, str, str, str, str, int]] = {
+        (
+            str(row.benchmark),
+            str(row.pregrouper),
+            str(row.model_s),
+            str(row.model_t),
+            str(row.metric),
+            str(row.statistic),
+            int(row.relative_depth_index),
+        )
+        for row in frame.itertuples()
+    }
+    if len(frame) != len(expected_keys) or actual_keys != expected_keys:
+        raise ValueError(f"{path} has an incomplete canonical layerwise grid")
+
+    expected_depth: pd.Series = pd.to_numeric(
+        frame["relative_depth_index"], errors="coerce"
+    ) / (depth_grid_size - 1)
+    numeric_columns: tuple[str, ...] = (
+        "f_point",
+        "f_lo",
+        "f_hi",
+        "n_observations",
+        "expected_observations",
+        "observation_coverage",
+        "n_prompts",
+        "expected_prompts",
+        "prompt_coverage",
+        "source_num_blocks",
+        "target_num_blocks",
+    )
+    numeric: pd.DataFrame = frame[list(numeric_columns)].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    if (
+        not np.isfinite(numeric.to_numpy(dtype=float)).all()
+        or not np.allclose(
+            pd.to_numeric(frame["relative_depth"], errors="coerce"),
+            expected_depth,
+        )
+        or not frame["relative_depth_grid_size"].eq(depth_grid_size).all()
+        or not frame["cohort"].eq("open").all()
+        or not frame["pair_population"].eq("open_open").all()
+        or not frame["scope"].eq("user").all()
+        or not frame["requested_scope"].eq("user").all()
+        or not frame["availability_status"].eq("available").all()
+        or not frame["unavailable_reason"].fillna("").eq("").all()
+        or not frame["aggregation"].eq("row_pooled").all()
+        or not frame["depth_alignment"]
+        .eq("linear_interpolation_block_outputs_only")
+        .all()
+        or not frame["embedding_slot_included"].eq(False).all()
+        or not numeric["observation_coverage"].eq(1.0).all()
+        or not numeric["prompt_coverage"].eq(1.0).all()
+        or not numeric["n_observations"].eq(numeric["expected_observations"]).all()
+        or not numeric["n_prompts"].eq(numeric["expected_prompts"]).all()
+        or (numeric[["source_num_blocks", "target_num_blocks"]] < 2).any().any()
+    ):
+        raise ValueError(f"{path} has invalid layerwise values or method metadata")
+    for benchmark, rows in frame.groupby("benchmark"):
+        expected_contrast: str = (
+            "entailment_contradiction"
+            if str(benchmark).startswith("anli_")
+            else "canonical"
+        )
+        if (
+            not rows["contrast"].eq(expected_contrast).all()
+            or not rows["requested_contrast"].eq(expected_contrast).all()
+        ):
+            raise ValueError(f"{path} has an incorrect contrast for {benchmark}")
+        for metric, metric_rows in rows.groupby("metric"):
+            source_contrast, target_contrast, readout = _contrast_metadata(
+                str(benchmark), expected_contrast, str(metric)
+            )
+            if (
+                not metric_rows["resolved_scope"]
+                .eq(_resolved_scope(str(metric), "user"))
+                .all()
+                or not metric_rows["resolved_source_contrast"].eq(source_contrast).all()
+                or not metric_rows["resolved_target_contrast"].eq(target_contrast).all()
+                or not metric_rows["readout_contrast"].eq(readout).all()
+            ):
+                raise ValueError(f"{path} has incorrect resolved estimand metadata")
+
+    parameters: dict[str, Any] = _validate_derived_sidecar(
+        results_dir,
+        path,
+        "benchmark_scripts.layerwise_fidelity",
+        list(LAYERWISE_CONFIGS),
+        OPEN_MODELS,
+        expected_input_paths=_layerwise_derived_inputs(results_dir),
+        supporting_source_files=LAYER_DERIVED_SUPPORTING_SOURCE_FILES,
+    )
+    expected_parameters: dict[str, Any] = {
+        "benchmark_configs": [
+            {"benchmark": benchmark, "pregrouper": pregrouper}
+            for benchmark, pregrouper in LAYERWISE_CONFIGS
+        ],
+        "scopes": ["user"],
+        "anli_contrast": "entailment_contradiction",
+        "models": list(OPEN_MODELS),
+        "depth_grid_size": depth_grid_size,
+        "depth_alignment": "linear_interpolation",
+        "depth_definition": "first_block_0_last_block_1_embedding_excluded",
+        "bootstrap_resamples": 1000,
+        "confidence_level": 0.95,
+        "seed": 42,
+        "bootstrap_rng": "sha256_cell_key_v1",
+        "missingness_policy": "pair_specific_complete_case",
+    }
+    if parameters != expected_parameters:
+        raise ValueError(f"Incorrect layerwise derivation parameters in {path}")
+    _validate_layerwise_endpoint_consistency(
+        frame,
+        _read_derived(ordinary_f_table_path),
+        path,
+        ordinary_f_table_path,
+    )
+
+
 def _validate_derived_outputs(
     results_dir: str,
     cohort_name: str,
@@ -2761,6 +3924,17 @@ def _validate_derived_outputs(
             "benchmark_scripts.f_table",
             list(DEFAULT_BENCHMARK_CONFIGS),
             models,
+            expected_input_paths=_f_table_derived_input_paths(
+                results_dir,
+                list(DEFAULT_BENCHMARK_CONFIGS),
+                models,
+                {
+                    (benchmark, pregrouper)
+                    for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS
+                    if benchmark.startswith("anli_")
+                },
+            ),
+            supporting_source_files=F_TABLE_DERIVED_SUPPORTING_SOURCE_FILES,
         )
         _validate_f_table_parameters(
             parameters,
@@ -2874,6 +4048,10 @@ def _validate_derived_outputs(
     ):
         raise ValueError(f"{race_path} has non-finite estimable RACE results")
 
+    _validate_layerwise_derived_output(
+        results_dir, os.path.join(results_dir, f"f_table{suffix}.tsv")
+    )
+
 
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
@@ -2944,6 +4122,8 @@ def main() -> None:
                 ),
             )
         )
+    if not args.allow_non_gold_manifests:
+        _validate_layer_artifacts(args.results_dir)
     _validate_open_model_identity_consistency(args.results_dir)
     if (
         args.dataset_dir is not None

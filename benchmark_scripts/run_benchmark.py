@@ -190,6 +190,7 @@ def _write_run_metadata(
         },
         "parameters": {
             "phases": sorted(phases),
+            "rendered_chat_add_special_tokens": False,
             "phase_attention_implementation": {
                 phase: _attention_implementation_for_phase(phase)
                 for phase in sorted(phases)

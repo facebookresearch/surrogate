@@ -20,5 +20,6 @@ results/**/*.tsv
 !results/f_table_finite_extreme_sensitivity.tsv
 !results/race_rv_open.tsv
 !results/race_rv.tsv
+!results/layerwise_fidelity.tsv
 !results/coverage.tsv
 !results/artifact_manifest.json

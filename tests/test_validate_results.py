@@ -13,6 +13,7 @@ from typing import Any, cast
 from unittest import TestCase
 from unittest.mock import AsyncMock, patch
 
+import numpy as np
 import pandas as pd
 
 from benchmark_scripts.derived_provenance import (
@@ -45,13 +46,17 @@ from benchmark_scripts.provenance_sources import (
     GOLD_OPEN_MODEL_REPOSITORIES,
     GOLD_OPEN_MODEL_REVISIONS,
     HOSTED_RECORD_SOURCE_FILES,
+    LAYER_EXECUTION_SOURCE_FILES,
     canonical_file_hash_manifest_sha256,
 )
 from benchmark_scripts.validate_results import (
+    ANALYSIS_SOURCE_FILES,
     DERIVED_SUPPORTING_SOURCE_FILES,
     HOSTED_CLASSIFICATION_REQUEST_PARAMETERS,
+    LAYERWISE_CONFIGS,
     OPEN_SEGMENT_COLUMNS,
     _allowed_release_files,
+    _layerwise_derived_inputs,
     _require_pair_grid,
     _read_tsv,
     _sha256,
@@ -65,6 +70,11 @@ from benchmark_scripts.validate_results import (
     _validate_hosted_audit_binding,
     _validate_hosted_completion_audit_binding,
     _validate_hosted_dialog_identities,
+    _validate_layer_alias_metadata,
+    _validate_layer_artifact,
+    _validate_layer_artifacts,
+    _validate_layerwise_endpoint_consistency,
+    _validate_layer_final_readout,
     _validate_manifest,
     _validate_open_model_identity,
     _validate_open_model_identity_consistency,
@@ -74,9 +84,384 @@ from benchmark_scripts.validate_results import (
     _write_artifact_manifest,
     validate_configuration,
 )
+from surrogate.eval_constants import BOOLQ_CONFIG
+
+
+def _boolq_layer_label_metadata(
+    rejected_aliases: set[str] | None = None,
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """Build valid canonical BoolQ alias metadata for validator fixtures."""
+    rejected_set: set[str] = rejected_aliases or set()
+    result: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    next_token_id: int = 1
+    for label, report_tokens in BOOLQ_CONFIG.report_tokens.items():
+        accepted: list[dict[str, Any]] = []
+        rejected: list[dict[str, Any]] = []
+        for token in report_tokens:
+            if token.alias in rejected_set:
+                rejected.append(
+                    {
+                        "alias": token.alias,
+                        "surface": token.surface,
+                        "token_ids": [next_token_id, next_token_id + 1],
+                    }
+                )
+                next_token_id += 2
+            else:
+                accepted.append(
+                    {
+                        "alias": token.alias,
+                        "surface": token.surface,
+                        "token_id": next_token_id,
+                    }
+                )
+                next_token_id += 1
+        result[label] = {
+            "accepted_single_token_aliases": accepted,
+            "deduplicated_single_token_aliases": [],
+            "rejected_multitoken_aliases": rejected,
+        }
+    return result
+
+
+def _write_layer_fixture(results_dir: str, model: str) -> tuple[str, str]:
+    """Write a minimal complete BoolQ layer artifact and sidecar."""
+    directory: str = os.path.join(results_dir, "boolq", "sentence")
+    os.makedirs(directory, exist_ok=True)
+    manifest_path: str = os.path.join(directory, "segments.tsv.gz")
+    manifest: pd.DataFrame = pd.DataFrame(
+        [
+            {
+                "prompt_idx": 0,
+                "answer": True,
+                "seg_idx": segment_index,
+                "message_idx": segment_index,
+                "message_role": "system" if segment_index == 0 else "user",
+                "message_seg_idx": 0,
+                "segment_text": f"segment {segment_index}",
+                "n_segments": 2,
+            }
+            for segment_index in range(2)
+        ]
+    )
+    manifest.to_csv(manifest_path, sep="\t", index=False)
+
+    rows: list[dict[str, Any]] = []
+    for kind, segment_index in (("orig", None), ("ablated", 0), ("ablated", 1)):
+        for layer_slot in range(3):
+            is_original: bool = kind == "orig"
+            rows.append(
+                {
+                    "prompt_idx": 0,
+                    "seg_idx": segment_index,
+                    "kind": kind,
+                    "answer": True,
+                    "layer_slot": layer_slot,
+                    "layer_kind": "embedding" if layer_slot == 0 else "block",
+                    "block_idx": None if layer_slot == 0 else layer_slot - 1,
+                    "label_score_true": float(layer_slot + 1),
+                    "label_score_false": float(layer_slot),
+                    "delta_norm_postnorm": None if is_original else 0.5,
+                    "w_dot_delta_z_postnorm_true_vs_false": (
+                        None if is_original else 0.25
+                    ),
+                    "w_norm_true_vs_false": 2.0,
+                }
+            )
+    layer_path: str = os.path.join(directory, f"{model}_layers.tsv.gz")
+    frame: pd.DataFrame = pd.DataFrame(rows)
+    frame.to_csv(layer_path, sep="\t", index=False)
+
+    model_hashes: dict[str, str] = {
+        "config.json": "1" * 64,
+        "tokenizer_config.json": "2" * 64,
+        "model.safetensors": "3" * 64,
+    }
+    identity_hashes: dict[str, str] = {
+        "config.json": "1" * 64,
+        "tokenizer_config.json": "2" * 64,
+    }
+    ordinary_identity: dict[str, Any] = {
+        "model_source": GOLD_OPEN_MODEL_REPOSITORIES[model],
+        "model_revision": GOLD_OPEN_MODEL_REVISIONS[model],
+        "model_artifact_manifest_sha256": canonical_file_hash_manifest_sha256(
+            model_hashes
+        ),
+        "model_artifact_sha256": model_hashes,
+        "model_identity_files_sha256": identity_hashes,
+    }
+    with open(
+        os.path.join(directory, f"{model}_run.json"), "w", encoding="utf-8"
+    ) as output:
+        json.dump(ordinary_identity, output)
+
+    repository_root: str = os.path.dirname(os.path.dirname(__file__))
+    sidecar: dict[str, Any] = {
+        "schema_version": 1,
+        "artifact": {
+            "filename": os.path.basename(layer_path),
+            "rows": len(frame),
+            "sha256": _sha256(layer_path),
+        },
+        "benchmark": "boolq",
+        "pregrouper": "sentence",
+        "segmentation_scope": "full_dialog_in_message_order",
+        "layer_slots": {
+            "count": 3,
+            "convention": (
+                "slot 0 is the embedding output; slot k+1 is decoder block k "
+                "output; final norm is applied before all scores"
+            ),
+        },
+        "model": model,
+        **ordinary_identity,
+        "model_artifact_hash_timing": "pre_model_load",
+        "dataset": {
+            "hf_path": "aps/super_glue",
+            "hf_name": "boolq",
+            "hf_split": "validation",
+            "snapshot_filename": "google_boolq_validation.tsv",
+            "snapshot_sha256": (
+                "80040aa10f18e5b01082386dae3bdde48931a0311e807f6cb10f7173995f346a"
+            ),
+            "normalized_frame_sha256": "4" * 64,
+            "prompts": 1,
+        },
+        "manifest_sha256": _sha256(manifest_path),
+        "labels": _boolq_layer_label_metadata(),
+        "alignment": {
+            "direction": (
+                "uniform sum of accepted label unembedding rows; each unordered "
+                "contrast follows configured label order"
+            ),
+            "multi_alias_status": (
+                "diagnostic approximation to grouped-logsumexp attribution"
+            ),
+        },
+        "label_score_definition": (
+            "intermediate slots store logsumexp of accepted alias logits; the "
+            "final slot stores logsumexp of the model's native-dtype full-head "
+            "log-probabilities to match ordinary outputs; pairwise differences "
+            "are grouped-label log-probability contrasts"
+        ),
+        "parameters": {
+            "attention_implementation": "sdpa",
+            "rendered_chat_add_special_tokens": False,
+            "batch_size": 32,
+            "canary": False,
+            "device_map": "auto",
+            "max_samples": None,
+            "seed": 42,
+            "torch_dtype": "bfloat16",
+        },
+        "software": {
+            "numpy": "2.0",
+            "pandas": "2.3",
+            "torch": "2.0",
+            "transformers": "4.0",
+            "cuda_runtime": "12.0",
+        },
+        "source_hash_timing": "run_start",
+        "source_sha256": {
+            relative: _sha256(os.path.join(repository_root, relative))
+            for relative in LAYER_EXECUTION_SOURCE_FILES
+        },
+    }
+    run_path: str = os.path.join(directory, f"{model}_layers_run.json")
+    with open(run_path, "w", encoding="utf-8") as output:
+        json.dump(sidecar, output)
+    return layer_path, run_path
 
 
 class TestValidateResults(TestCase):
+    def test_layerwise_final_depth_must_match_ordinary_f_table(self) -> None:
+        identity: dict[str, Any] = {
+            "benchmark": "boolq",
+            "pregrouper": "sentence",
+            "scope": "user",
+            "contrast": "canonical",
+            "model_s": OPEN_MODELS[0],
+            "model_t": OPEN_MODELS[1],
+            "metric": "F_attr",
+            "statistic": "pearson_r2",
+        }
+        values: dict[str, Any] = {
+            "f_point": 0.5,
+            "n_observations": 10,
+            "expected_observations": 10,
+            "observation_coverage": 1.0,
+            "n_prompts": 3,
+            "expected_prompts": 3,
+            "prompt_coverage": 1.0,
+        }
+        ordinary: pd.DataFrame = pd.DataFrame([{**identity, **values}])
+        layerwise: pd.DataFrame = pd.DataFrame(
+            [{**identity, **values, "relative_depth": 1.0}]
+        )
+        _validate_layerwise_endpoint_consistency(
+            layerwise, ordinary, "layerwise.tsv", "f_table.tsv"
+        )
+
+        layerwise.loc[0, "f_point"] = 0.501
+        with self.assertRaisesRegex(ValueError, "point estimates disagree"):
+            _validate_layerwise_endpoint_consistency(
+                layerwise, ordinary, "layerwise.tsv", "f_table.tsv"
+            )
+
+        # Rank correlations may move slightly when independent BF16 batches
+        # swap nearly tied values, while continuous correlations remain exact.
+        ordinary.loc[0, "statistic"] = "spearman"
+        layerwise.loc[0, "statistic"] = "spearman"
+        layerwise.loc[0, "f_point"] = 0.5005
+        _validate_layerwise_endpoint_consistency(
+            layerwise, ordinary, "layerwise.tsv", "f_table.tsv"
+        )
+        layerwise.loc[0, "f_point"] = 0.5011
+        with self.assertRaisesRegex(ValueError, "statistic=spearman"):
+            _validate_layerwise_endpoint_consistency(
+                layerwise, ordinary, "layerwise.tsv", "f_table.tsv"
+            )
+
+    def test_layer_alias_metadata_requires_exact_partition_without_dedup(self) -> None:
+        metadata: dict[str, dict[str, list[dict[str, Any]]]] = (
+            _boolq_layer_label_metadata()
+        )
+        accepted, rejected = _validate_layer_alias_metadata(
+            metadata, "boolq", "layers_run.json"
+        )
+        self.assertEqual(
+            sum(len(aliases) for aliases in accepted.values()),
+            sum(len(tokens) for tokens in BOOLQ_CONFIG.report_tokens.values()),
+        )
+        self.assertFalse(any(rejected.values()))
+
+        missing_alias: dict[str, dict[str, list[dict[str, Any]]]] = json.loads(
+            json.dumps(metadata)
+        )
+        missing_alias["true"]["accepted_single_token_aliases"].pop()
+        with self.assertRaisesRegex(ValueError, "partition disagrees"):
+            _validate_layer_alias_metadata(missing_alias, "boolq", "layers_run.json")
+
+        deduplicated: dict[str, dict[str, list[dict[str, Any]]]] = json.loads(
+            json.dumps(metadata)
+        )
+        true_accepted: list[dict[str, Any]] = deduplicated["true"][
+            "accepted_single_token_aliases"
+        ]
+        duplicate: dict[str, Any] = true_accepted.pop()
+        retained: dict[str, Any] = true_accepted[0]
+        deduplicated["true"]["deduplicated_single_token_aliases"].append(
+            {
+                "alias": duplicate["alias"],
+                "surface": duplicate["surface"],
+                "token_id": retained["token_id"],
+                "duplicate_of_alias": retained["alias"],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "cannot contain deduplicated"):
+            _validate_layer_alias_metadata(deduplicated, "boolq", "layers_run.json")
+
+    def test_final_layer_readout_must_match_ordinary_token_contrasts(self) -> None:
+        model: str = "test-model"
+        with tempfile.TemporaryDirectory() as results_dir:
+            directory: str = os.path.join(results_dir, "boolq", "sentence")
+            os.makedirs(directory)
+            layer_path: str = os.path.join(directory, f"{model}_layers.tsv.gz")
+            token_path: str = os.path.join(directory, f"{model}_tokens.tsv.gz")
+            run_path: str = os.path.join(directory, f"{model}_layers_run.json")
+            ordinary_rows: list[dict[str, Any]] = []
+            layer_rows: list[dict[str, Any]] = []
+            rejected_aliases: set[str] = {
+                report_tokens[-1].alias
+                for report_tokens in BOOLQ_CONFIG.report_tokens.values()
+            }
+            label_metadata = _boolq_layer_label_metadata(rejected_aliases)
+            for kind, seg_idx, shift in (("orig", np.nan, 0.0), ("ablated", 0, 0.5)):
+                scores: dict[str, float] = {}
+                for label_index, (label, report_tokens) in enumerate(
+                    BOOLQ_CONFIG.report_tokens.items()
+                ):
+                    accepted_values: list[float] = []
+                    for alias_index, token in enumerate(report_tokens):
+                        accepted: bool = token.alias not in rejected_aliases
+                        direction: float = -1.0 if label == "true" else 1.0
+                        logprob: float = (
+                            -1.0
+                            - label_index * 2.0
+                            - alias_index * 0.25
+                            + direction * shift
+                            if accepted
+                            else float("nan")
+                        )
+                        ordinary_rows.append(
+                            {
+                                "prompt_idx": 0,
+                                "seg_idx": seg_idx,
+                                "kind": kind,
+                                "label": label,
+                                "token": token.alias,
+                                "logprob": logprob,
+                            }
+                        )
+                        if accepted:
+                            accepted_values.append(logprob)
+                    scores[label] = float(np.logaddexp.reduce(accepted_values))
+                for layer_slot in (0, 1):
+                    layer_rows.append(
+                        {
+                            "prompt_idx": 0,
+                            "seg_idx": seg_idx,
+                            "kind": kind,
+                            "layer_slot": layer_slot,
+                            "label_score_true": scores["true"],
+                            "label_score_false": scores["false"],
+                        }
+                    )
+            pd.DataFrame(layer_rows).to_csv(layer_path, sep="\t", index=False)
+            pd.DataFrame(ordinary_rows).to_csv(token_path, sep="\t", index=False)
+            with open(run_path, "w", encoding="utf-8") as output:
+                json.dump({"labels": label_metadata}, output)
+
+            errors = _validate_layer_final_readout(
+                results_dir, "boolq", "sentence", model
+            )
+            self.assertLess(errors["true_minus_false"], 1e-12)
+
+            valid_tokens: pd.DataFrame = pd.read_csv(
+                token_path,
+                sep="\t",
+                dtype={"kind": str, "label": str, "token": str},
+            )
+            accepted_alias: str = str(
+                label_metadata["true"]["accepted_single_token_aliases"][0]["alias"]
+            )
+            accepted_mask: pd.Series = valid_tokens["token"].eq(accepted_alias)
+            invalid_accepted: pd.DataFrame = valid_tokens.copy()
+            invalid_accepted.loc[accepted_mask, "logprob"] = np.nan
+            invalid_accepted.to_csv(token_path, sep="\t", index=False)
+            with self.assertRaisesRegex(ValueError, "must be finite"):
+                _validate_layer_final_readout(results_dir, "boolq", "sentence", model)
+
+            rejected_alias: str = next(iter(rejected_aliases))
+            rejected_mask: pd.Series = valid_tokens["token"].eq(rejected_alias)
+            invalid_rejected: pd.DataFrame = valid_tokens.copy()
+            invalid_rejected.loc[rejected_mask, "logprob"] = -10.0
+            invalid_rejected.to_csv(token_path, sep="\t", index=False)
+            with self.assertRaisesRegex(ValueError, "must be missing"):
+                _validate_layer_final_readout(results_dir, "boolq", "sentence", model)
+
+            valid_tokens.iloc[:-1].to_csv(token_path, sep="\t", index=False)
+            with self.assertRaisesRegex(ValueError, "grid disagrees"):
+                _validate_layer_final_readout(results_dir, "boolq", "sentence", model)
+
+            valid_tokens.to_csv(token_path, sep="\t", index=False)
+
+            corrupted: pd.DataFrame = pd.read_csv(layer_path, sep="\t")
+            corrupted.loc[corrupted["layer_slot"] == 1, "label_score_true"] += 0.01
+            corrupted.to_csv(layer_path, sep="\t", index=False)
+            with self.assertRaisesRegex(ValueError, "disagrees with ordinary"):
+                _validate_layer_final_readout(results_dir, "boolq", "sentence", model)
+
     def test_read_tsv_preserves_decimal_float_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path: str = os.path.join(directory, "scores.tsv")
@@ -378,6 +763,10 @@ class TestValidateResults(TestCase):
                 ),
             },
             "execution_model_source": "Qwen/Qwen2.5-0.5B-Instruct",
+            "execution_dependency_hash_timing": (
+                "post_run_reconstruction_not_execution_attested"
+            ),
+            "execution_dependency_sha256": {},
             "execution_source_hash_timing": "run_completion",
             "manifest_sha256": "3" * 64,
             "model": model,
@@ -396,22 +785,28 @@ class TestValidateResults(TestCase):
                     "attention": "eager",
                 },
                 "phases": ["ablation", "attention"],
+                "rendered_chat_add_special_tokens": True,
                 "seed": 42,
             },
             "pregrouper": "sentence",
             "provenance_seal_sha256": "6" * 64,
             "release_source_sha256": {},
             "release_source_corrections": {},
-            "schema_version": 3,
+            "schema_version": 5,
             "segmentation_scope": "full_dialog_in_message_order",
             "software": {
-                "cuda_runtime": "13.0",
                 "numpy": "2.2.1",
                 "pandas": "2.2.3",
                 "torch": "2.15.0a0+fb",
-                "transformers": "4.0.0",
             },
             "source_sha256": {},
+            "tokenization_verification": {
+                "effective_bos_count": 0,
+                "no_duplicate_special_tokens": True,
+                "verification_method": (
+                    "qwen_rendered_token_ids_equal_with_special_tokens_true_or_false"
+                ),
+            },
         }
         _validate_gold_run_metadata_schema(provenance, model, "boolq", "", "run.json")
         provenance["internal_path"] = "/private/service"
@@ -422,6 +817,12 @@ class TestValidateResults(TestCase):
         del provenance["internal_path"]
         provenance["model_source"] = "private-routing-alias"
         with self.assertRaisesRegex(ValueError, "model source disagrees"):
+            _validate_gold_run_metadata_schema(
+                provenance, model, "boolq", "", "run.json"
+            )
+        provenance["model_source"] = "Qwen/Qwen2.5-0.5B-Instruct"
+        provenance["parameters"]["rendered_chat_add_special_tokens"] = "default"
+        with self.assertRaisesRegex(ValueError, "parameter fields disagree"):
             _validate_gold_run_metadata_schema(
                 provenance, model, "boolq", "", "run.json"
             )
@@ -520,6 +921,86 @@ class TestValidateResults(TestCase):
                     json.dump(altered, output)
                 with self.assertRaisesRegex(ValueError, "identity differs"):
                     _validate_open_model_identity_consistency(results_dir)
+
+    def test_layer_artifact_is_bound_to_grid_identity_and_single_bos(self) -> None:
+        model: str = "qwen2.5-0.5b-instruct"
+        with tempfile.TemporaryDirectory() as results_dir:
+            layer_path, run_path = _write_layer_fixture(results_dir, model)
+            with (
+                patch(
+                    "benchmark_scripts.validate_results._validate_open_model_identity"
+                ),
+                patch("benchmark_scripts.validate_results._validate_gold_manifest"),
+            ):
+                _validate_layer_artifact(results_dir, "boolq", "sentence", model)
+
+                with open(run_path, encoding="utf-8") as source:
+                    sidecar: dict[str, Any] = json.load(source)
+                parameters: dict[str, Any] = cast(dict[str, Any], sidecar["parameters"])
+                parameters["rendered_chat_add_special_tokens"] = True
+                with open(run_path, "w", encoding="utf-8") as output:
+                    json.dump(sidecar, output)
+                with self.assertRaisesRegex(ValueError, "parameters disagree"):
+                    _validate_layer_artifact(results_dir, "boolq", "sentence", model)
+
+                parameters["rendered_chat_add_special_tokens"] = False
+                parameters["batch_size"] = 8
+                with open(run_path, "w", encoding="utf-8") as output:
+                    json.dump(sidecar, output)
+                with self.assertRaisesRegex(ValueError, "parameters disagree"):
+                    _validate_layer_artifact(results_dir, "boolq", "sentence", model)
+
+                parameters["batch_size"] = 32
+                with open(run_path, "w", encoding="utf-8") as output:
+                    json.dump(sidecar, output)
+                frame: pd.DataFrame = pd.read_csv(layer_path, sep="\t").iloc[:-1]
+                frame.to_csv(layer_path, sep="\t", index=False)
+                artifact: dict[str, Any] = cast(dict[str, Any], sidecar["artifact"])
+                artifact["rows"] = len(frame)
+                artifact["sha256"] = _sha256(layer_path)
+                with open(run_path, "w", encoding="utf-8") as output:
+                    json.dump(sidecar, output)
+                with self.assertRaisesRegex(ValueError, "incomplete layer grid"):
+                    _validate_layer_artifact(results_dir, "boolq", "sentence", model)
+
+    def test_layer_matrix_uses_canonical_configs_and_open_models(self) -> None:
+        with (
+            patch(
+                "benchmark_scripts.validate_results._validate_layer_artifact"
+            ) as validate,
+            patch(
+                "benchmark_scripts.validate_results._validate_layer_final_readout"
+            ) as validate_final,
+        ):
+            _validate_layer_artifacts("/results")
+        expected = {
+            (benchmark, pregrouper, model)
+            for benchmark, pregrouper in LAYERWISE_CONFIGS
+            for model in OPEN_MODELS
+        }
+        self.assertEqual({call.args[1:] for call in validate.call_args_list}, expected)
+        self.assertEqual(
+            {call.args[1:] for call in validate_final.call_args_list}, expected
+        )
+
+    def test_release_inventory_and_analysis_sources_include_layerwise_outputs(
+        self,
+    ) -> None:
+        allowed: set[str] = _allowed_release_files("open")
+        self.assertIn("layerwise_fidelity.tsv", allowed)
+        self.assertIn("layerwise_fidelity.tsv.provenance.json", allowed)
+        for benchmark, pregrouper in LAYERWISE_CONFIGS:
+            for model in OPEN_MODELS:
+                prefix: str = f"{benchmark}/{pregrouper}/{model}"
+                self.assertIn(f"{prefix}_layers.tsv.gz", allowed)
+                self.assertIn(f"{prefix}_layers_run.json", allowed)
+        self.assertIn("benchmark_scripts/layerwise_fidelity.py", ANALYSIS_SOURCE_FILES)
+        self.assertIn("benchmark_scripts/run_layerwise.py", ANALYSIS_SOURCE_FILES)
+        self.assertIn("surrogate/layerwise_scoring.py", ANALYSIS_SOURCE_FILES)
+
+        inputs: dict[str, str] = _layerwise_derived_inputs("/results")
+        expected_input_count: int = len(LAYERWISE_CONFIGS) * (2 * len(OPEN_MODELS) + 1)
+        self.assertEqual(len(inputs), expected_input_count)
 
     def test_every_open_segment_metric_must_be_finite(self) -> None:
         complete: pd.DataFrame = pd.DataFrame(
@@ -1355,6 +1836,7 @@ class TestValidateResults(TestCase):
                     [("boolq", "sentence")],
                     ("model", "model-a"),
                 )
+
             write_derived_provenance(
                 output_path,
                 generator_name="benchmark_scripts.f_table",
@@ -1408,12 +1890,73 @@ class TestValidateResults(TestCase):
                     ("model", "model-a"),
                 )
 
+    def test_derived_sidecar_accepts_exact_layerwise_input_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as results_dir:
+            input_path: str = os.path.join(results_dir, "model_layers.tsv.gz")
+            output_path: str = os.path.join(results_dir, "layerwise_fidelity.tsv")
+            with open(input_path, "wb") as output:
+                output.write(b"layer input")
+            with open(output_path, "w", encoding="utf-8") as output:
+                output.write("metric\nF_attr\n")
+            repository_root: str = os.path.dirname(os.path.dirname(__file__))
+            input_paths: dict[str, str] = {"boolq/model/layers": input_path}
+            supporting_files: tuple[str, ...] = (
+                "benchmark_scripts/derived_provenance.py",
+                "surrogate/eval_constants.py",
+            )
+            write_derived_provenance(
+                output_path,
+                generator_name="benchmark_scripts.layerwise_fidelity",
+                generator_path=os.path.join(
+                    repository_root, "benchmark_scripts/layerwise_fidelity.py"
+                ),
+                input_paths=input_paths,
+                parameters={"depth_grid_size": 21},
+                root_dir=results_dir,
+                supporting_source_paths={
+                    relative: os.path.join(repository_root, relative)
+                    for relative in supporting_files
+                },
+            )
+
+            parameters: dict[str, Any] = _validate_derived_sidecar(
+                results_dir,
+                output_path,
+                "benchmark_scripts.layerwise_fidelity",
+                list(LAYERWISE_CONFIGS),
+                OPEN_MODELS,
+                expected_input_paths=input_paths,
+                supporting_source_files=supporting_files,
+            )
+            self.assertEqual(parameters, {"depth_grid_size": 21})
+
+            with open(input_path, "ab") as output:
+                output.write(b"tampered")
+            with self.assertRaisesRegex(ValueError, "input seal disagrees"):
+                _validate_derived_sidecar(
+                    results_dir,
+                    output_path,
+                    "benchmark_scripts.layerwise_fidelity",
+                    list(LAYERWISE_CONFIGS),
+                    OPEN_MODELS,
+                    expected_input_paths=input_paths,
+                    supporting_source_files=supporting_files,
+                )
+
     def test_f_table_parameters_reject_undeclared_fields(self) -> None:
         models: tuple[str, ...] = ("model-a", "model-b")
         parameters: dict[str, Any] = {
             "benchmark_configs": [{"benchmark": "boolq", "pregrouper": "sentence"}],
             "scopes": ["all"],
             "contrasts": ["canonical"],
+            "resolved_jobs": [
+                {
+                    "benchmark": "boolq",
+                    "pregrouper": "sentence",
+                    "scope": "all",
+                    "contrast": "canonical",
+                }
+            ],
             "bootstrap_resamples": 1000,
             "confidence_level": 0.95,
             "seed": 42,

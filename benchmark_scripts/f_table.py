@@ -319,6 +319,11 @@ def _readout_matches_contrast(benchmark: str, contrast: str) -> bool:
     )
 
 
+def _uses_layer_readout(benchmark: str, contrast: str) -> bool:
+    """Whether the requested alignment is supplied by a layer artifact."""
+    return benchmark.startswith("anli_") and contrast == "entailment_contradiction"
+
+
 def _resolved_contrast(benchmark: str, contrast: str) -> str:
     """Resolve a requested contrast to an explicit ordered scientific quantity."""
     if contrast != "canonical":
@@ -349,12 +354,51 @@ def _resolved_scope(metric: str, scope: str) -> str:
     return f"{scope}_segment_coordinates_from_full_dialog"
 
 
+def _analysis_jobs(
+    benchmark_configs: list[tuple[str, str]],
+    scopes: list[str],
+    contrasts: list[str],
+    anli_contrast: str,
+) -> list[tuple[str, str, str, str]]:
+    """Resolve requested analyses without overriding explicit ANLI contrasts.
+
+    ``--anli-contrast`` defines only what ``canonical`` means for ANLI. An
+    explicitly requested contrast remains explicit, which permits E-N and E-C
+    sensitivity analyses in one invocation. Duplicate resolved jobs are
+    removed while preserving request order.
+    """
+    jobs: list[tuple[str, str, str, str]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for benchmark, pregrouper in benchmark_configs:
+        for scope in scopes:
+            for contrast in contrasts:
+                resolved_contrast: str = (
+                    anli_contrast
+                    if benchmark.startswith("anli_") and contrast == "canonical"
+                    else contrast
+                )
+                job: tuple[str, str, str, str] = (
+                    benchmark,
+                    pregrouper,
+                    scope,
+                    resolved_contrast,
+                )
+                if job not in seen:
+                    seen.add(job)
+                    jobs.append(job)
+    return jobs
+
+
 def _contrast_metadata(
     benchmark: str, contrast: str, metric: str
 ) -> tuple[str, str, str]:
     """Return resolved source, target, and readout contrasts for one metric."""
     requested: str = _resolved_contrast(benchmark, contrast)
-    readout: str = _resolved_contrast(benchmark, "canonical")
+    readout: str = (
+        requested
+        if _uses_layer_readout(benchmark, contrast)
+        else _resolved_contrast(benchmark, "canonical")
+    )
     if metric in {"F_pred", "F_attr"}:
         return requested, requested, "not_applicable"
     if metric == "F_align":
@@ -373,13 +417,61 @@ def _analysis_rng(seed: int, *identity_parts: str) -> np.random.Generator:
     return np.random.default_rng(derived_seed)
 
 
+def _log_final_layer_crosscheck(
+    benchmark: str,
+    model: str,
+    signal_name: str,
+    layer_signal: pd.Series,
+    ordinary_signal: pd.Series | None,
+) -> None:
+    """Log a diagnostic comparison without imposing an acceptance threshold."""
+    if ordinary_signal is None:
+        return
+    joined: pd.DataFrame = pd.concat(
+        [layer_signal.rename("layer"), ordinary_signal.rename("ordinary")],
+        axis=1,
+        join="inner",
+    )
+    finite: np.ndarray = np.isfinite(joined.to_numpy(dtype=float)).all(axis=1)
+    complete: pd.DataFrame = joined.loc[finite]
+    if len(complete) < 2:
+        logger.warning(
+            "%s/%s final-layer %s cross-check has only %d complete cells",
+            benchmark,
+            model,
+            signal_name,
+            len(complete),
+        )
+        return
+    error: pd.Series = (complete["layer"] - complete["ordinary"]).abs()
+    correlation: float = float(
+        np.corrcoef(
+            complete["layer"].to_numpy(dtype=float),
+            complete["ordinary"].to_numpy(dtype=float),
+        )[0, 1]
+    )
+    logger.info(
+        "%s/%s final-layer %s diagnostic: n=%d pearson_r=%.9g "
+        "median_abs_delta=%.9g max_abs_delta=%.9g",
+        benchmark,
+        model,
+        signal_name,
+        len(complete),
+        correlation,
+        float(error.median()),
+        float(error.max()),
+    )
+
+
 def _derived_input_paths(
     results_dir: str,
     benchmark_configs: list[tuple[str, str]],
     cohort: tuple[str, ...] | None,
+    layer_alignment_configs: set[tuple[str, str]] | None = None,
 ) -> dict[str, str]:
     """Return immediate tables and committed inputs for an F-table invocation."""
     inputs: dict[str, str] = {}
+    layer_configs: set[tuple[str, str]] = layer_alignment_configs or set()
     for benchmark, pregrouper in benchmark_configs:
         segment_path: str = os.path.join(
             results_dir, f"{benchmark}_{pregrouper}_segments.tsv"
@@ -387,16 +479,47 @@ def _derived_input_paths(
         logodds_path: str = os.path.join(
             results_dir, f"{benchmark}_{pregrouper}_logodds.tsv"
         )
-        inputs.update(
-            collect_result_inputs(
-                results_dir,
-                benchmark,
-                pregrouper,
-                {"segments": segment_path, "logodds": logodds_path},
-                cohort,
-            )
+        config_inputs: dict[str, str] = collect_result_inputs(
+            results_dir,
+            benchmark,
+            pregrouper,
+            {"segments": segment_path, "logodds": logodds_path},
+            cohort,
         )
+        config_inputs = {
+            identifier: path
+            for identifier, path in config_inputs.items()
+            if not os.path.basename(path).endswith("_layers_run.json")
+        }
+        if (benchmark, pregrouper) in layer_configs:
+            from benchmark_scripts.layerwise_fidelity import (
+                _layer_sidecar_path,
+                _model_path,
+            )
+
+            layer_models: tuple[str, ...] = tuple(
+                model for model in OPEN_MODELS if cohort is None or model in cohort
+            )
+            prefix: str = f"{benchmark}/{pregrouper}/raw"
+            for model in layer_models:
+                layer_path: str = _model_path(results_dir, benchmark, pregrouper, model)
+                sidecar_path: str = _layer_sidecar_path(layer_path)
+                config_inputs[f"{prefix}/{os.path.basename(layer_path)}"] = layer_path
+                config_inputs[f"{prefix}/{os.path.basename(sidecar_path)}"] = (
+                    sidecar_path
+                )
+        inputs.update(config_inputs)
     return inputs
+
+
+def _supporting_source_paths() -> dict[str, str]:
+    """Return public sources that materially define the F-table."""
+    paths: dict[str, str] = derived_supporting_source_paths()
+    relative_path: str = "benchmark_scripts/layerwise_fidelity.py"
+    paths[relative_path] = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), relative_path
+    )
+    return paths
 
 
 def _scope_keys(
@@ -1082,6 +1205,8 @@ def _process_benchmark(
             )
         )
 
+    prediction_by_model: dict[str, pd.Series] = dict(sig_by_model)
+
     # F_attr — per-(prompt, seg) ablation response.
     abl_by_model: dict[str, pd.Series] = {}
     if not odds_df.empty:
@@ -1181,13 +1306,59 @@ def _process_benchmark(
         )
     )
 
-    # F_align uses the linear-readout direction materialized during the run.
-    # ANLI's stored direction is entailment-neutral and cannot be relabeled as
-    # entailment-contradiction by selecting different log-probability columns.
+    # F_align uses the linear-readout direction materialized during the ordinary
+    # run when it matches the requested contrast. ANLI E-C instead uses the
+    # requested sum-unembedding direction at the sidecar-bound final block.
     readout_matches_contrast: bool = _readout_matches_contrast(benchmark, contrast)
+    uses_layer_readout: bool = _uses_layer_readout(benchmark, contrast)
+    needs_alignment: bool = requested_metrics is None or bool(
+        requested_metrics & {"F_align", "F_align_to_attr"}
+    )
     models_align: list[str] = []
     align_by_model: dict[str, pd.Series] = {}
-    if readout_matches_contrast:
+    if uses_layer_readout and needs_alignment:
+        from benchmark_scripts.layerwise_fidelity import load_final_layer_readout
+
+        models_align = [
+            model for model in OPEN_MODELS if cohort is None or model in cohort
+        ]
+        for model in models_align:
+            final_readout = load_final_layer_readout(
+                results_dir,
+                benchmark,
+                pregrouper,
+                model,
+                scope,
+                contrast,
+            )
+            align_by_model[model] = final_readout.alignment
+            _log_final_layer_crosscheck(
+                benchmark,
+                model,
+                "F_pred",
+                final_readout.prediction,
+                prediction_by_model.get(model),
+            )
+            _log_final_layer_crosscheck(
+                benchmark,
+                model,
+                "F_attr",
+                final_readout.attribution,
+                abl_by_model.get(model),
+            )
+        out.extend(
+            _emit_pair_corrs(
+                benchmark,
+                "F_align",
+                align_by_model,
+                n_resamples,
+                conf,
+                rng,
+                bootstrap_seed=bootstrap_seed,
+                rng_context=rng_context("F_align"),
+            )
+        )
+    elif readout_matches_contrast:
         models_align = _in_cohort(
             _eligible_seg_models(
                 seg_df,
@@ -1210,7 +1381,7 @@ def _process_benchmark(
                 rng_context=rng_context("F_align"),
             )
         )
-    else:
+    elif needs_alignment:
         models_align = _in_cohort(
             _eligible_seg_models(
                 seg_df,
@@ -1249,7 +1420,7 @@ def _process_benchmark(
                     rng_context=rng_context("F_align_to_attr"),
                 )
             )
-        elif not readout_matches_contrast:
+        elif needs_alignment and not (readout_matches_contrast or uses_layer_readout):
             out.extend(
                 _emit_unavailable_pairs(
                     benchmark,
@@ -1433,21 +1604,12 @@ def main() -> None:
         if args.benchmarks is not None
         else DEFAULT_BENCHMARK_CONFIGS
     )
-    jobs: list[tuple[str, str, str, str]] = [
-        (
-            bench,
-            pregrouper,
-            scope,
-            (
-                args.anli_contrast
-                if args.anli_contrast is not None and bench.startswith("anli_")
-                else contrast
-            ),
-        )
-        for bench, pregrouper in benchmark_configs
-        for scope in args.scopes
-        for contrast in args.contrasts
-    ]
+    jobs: list[tuple[str, str, str, str]] = _analysis_jobs(
+        benchmark_configs,
+        list(args.scopes),
+        list(args.contrasts),
+        args.anli_contrast,
+    )
     for bench, pregrouper, scope, contrast in tqdm(
         jobs, desc="benchmark analyses", unit="analysis"
     ):
@@ -1529,11 +1691,24 @@ def main() -> None:
         set(out_df.get("model_s", pd.Series(dtype=str)).dropna().astype(str))
         | set(out_df.get("model_t", pd.Series(dtype=str)).dropna().astype(str))
     )
+    alignment_requested: bool = args.metrics is None or bool(
+        set(args.metrics) & {"F_align", "F_align_to_attr"}
+    )
+    layer_alignment_configs: set[tuple[str, str]] = {
+        (benchmark, pregrouper)
+        for benchmark, pregrouper, _scope, contrast in jobs
+        if alignment_requested and _uses_layer_readout(benchmark, contrast)
+    }
     write_derived_provenance(
         out_path,
         generator_name="benchmark_scripts.f_table",
         generator_path=__file__,
-        input_paths=_derived_input_paths(args.results_dir, benchmark_configs, cohort),
+        input_paths=_derived_input_paths(
+            args.results_dir,
+            benchmark_configs,
+            cohort,
+            layer_alignment_configs,
+        ),
         parameters={
             "benchmark_configs": [
                 {"benchmark": benchmark, "pregrouper": pregrouper}
@@ -1542,6 +1717,15 @@ def main() -> None:
             "scopes": list(args.scopes),
             "contrasts": list(args.contrasts),
             "anli_contrast": args.anli_contrast,
+            "resolved_jobs": [
+                {
+                    "benchmark": benchmark,
+                    "pregrouper": pregrouper,
+                    "scope": scope,
+                    "contrast": contrast,
+                }
+                for benchmark, pregrouper, scope, contrast in jobs
+            ],
             "bootstrap_resamples": args.bootstrap_resamples,
             "confidence_level": args.confidence_level,
             "seed": args.seed,
@@ -1559,7 +1743,7 @@ def main() -> None:
             "metrics": sorted(args.metrics) if args.metrics is not None else None,
         },
         root_dir=args.results_dir,
-        supporting_source_paths=derived_supporting_source_paths(),
+        supporting_source_paths=_supporting_source_paths(),
     )
     logger.info(f"Wrote {len(out_df)} rows to {out_path}")
 

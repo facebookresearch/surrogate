@@ -267,8 +267,10 @@ async def attention_segment_scores(
 
     # Step 2: Tokenize with offset mapping
     text: str = model.dialog_to_text(dialog)
-    inputs: dict[str, Any] = model._tokenizer(
-        text, return_tensors="pt", return_offsets_mapping=True
+    inputs: dict[str, Any] = model._tokenize_rendered_text(
+        text,
+        return_tensors="pt",
+        return_offsets_mapping=True,
     )
     input_ids: torch.Tensor = inputs["input_ids"].to(model._model.device)
     attention_mask: torch.Tensor | None = inputs.get("attention_mask")

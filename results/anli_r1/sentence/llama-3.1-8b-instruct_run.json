@@ -1,7 +1,7 @@
 {
   "artifact_sha256": {
-    "segment": "823290c8684d3a6b01e04e15ca8e63a69b77514f9a91f1e5b4a7a74ebef00159",
-    "tokens": "2b0a3a30e228adc50b0caf9f6690435e8bb259ee26052bd30141993d21edc7a9"
+    "segment": "1a595d584460cb10be0e3f68306440284b58ab16ca857d119c77bc73a32bea49",
+    "tokens": "4b36adc316f6ac8aea9bfb97bd23280717ea2036f6d09d2202b1d25bb989a753"
   },
   "benchmark": "anli_r1",
   "dataset": {
@@ -13,8 +13,21 @@
     "snapshot_filename": "facebook_anli_test_r1.tsv",
     "snapshot_sha256": "b87837e172a9a98c70217677fb4897fd6dd3a32497dface9ad3621ea2c85839d"
   },
-  "execution_model_source": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-  "execution_source_hash_timing": "run_completion",
+  "execution_dependency_hash_timing": "run_start",
+  "execution_dependency_sha256": {
+    "benchmark_scripts/benchmark_config.py": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
+    "benchmark_scripts/run_benchmark.py": "7e68f08b7ff115240e01cf5d718ec6ccdbfa816981dbb2e7f5783b10a5196980",
+    "surrogate/attention_scoring.py": "63cb3535ab296ff952ea3caf57479391d399cf703170d2ece501e549d9393fa3",
+    "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
+    "surrogate/model_types.py": "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd",
+    "surrogate/representation_scoring.py": "c574c6cfaa5c9d3b6380129d019ef259f06f19ccb0f01c07def1a60abc391b0c",
+    "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+    "surrogate/transformers_model.py": "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b",
+    "surrogate/transformers_scoring.py": "18a894fd3f0153152162ee7ee4b028f1a673e62468b1a00762ddf8033f71e35e",
+    "surrogate/utils.py": "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638"
+  },
+  "execution_model_source": "meta-llama/Llama-3.1-8B-Instruct",
+  "execution_source_hash_timing": "run_start",
   "manifest_sha256": "ea78cd479d87294db5077d44746f7360452d5c08dd8af003a3b4654ffbc48dad",
   "model": "llama-3.1-8b-instruct",
   "model_artifact_hash_timing": "post_run_seal",
@@ -52,63 +65,59 @@
       "ablation",
       "attention"
     ],
+    "rendered_chat_add_special_tokens": false,
     "seed": 42
   },
   "pregrouper": "sentence",
-  "provenance_seal_sha256": "d22a064ebb8868c2a4495cb71a1f48784b6640dcc6fe5783b73aeb4e0efd1073",
-  "release_source_corrections": {
-    "benchmark_scripts/benchmark_config.py": {
-      "execution_sha256": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
-      "reason": "Canonicalize both public Llama repository locators.",
-      "release_sha256": "2eab350439b48525eaf0f5b710856a494af61af2c89e1286ed9029514eb64dfb",
-      "scope": "model_locator_only_no_numerical_change"
-    },
-    "benchmark_scripts/run_benchmark.py": {
-      "execution_sha256": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
-      "reason": "Hash the complete execution dependency set once at run start for future runs.",
-      "release_sha256": "c4d0555ce2d9687eeb4e84e93ebc8f53d67832989e6cea2b4c31af23d1e3700a",
-      "scope": "provenance_only_no_numerical_change"
-    }
-  },
+  "provenance_seal_sha256": "5237b47ea5346bbdd31f7297706147b8fcb31c91aff09194a7361d450bf44191",
+  "release_source_corrections": {},
   "release_source_sha256": {
-    "benchmark_scripts/attention_replay_receipt.py": "402082e9e54c245c9d81badf80464b89f9903aca0748fe94fbe8b042ba552236",
-    "benchmark_scripts/benchmark_config.py": "2eab350439b48525eaf0f5b710856a494af61af2c89e1286ed9029514eb64dfb",
+    "benchmark_scripts/benchmark_config.py": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
     "benchmark_scripts/compute_logodds.py": "e79fd4606ed6f749bf0f2b0f7dc0aa4845d14d3378a60c1d030ae5f2362550cc",
     "benchmark_scripts/consolidate_results.py": "f9fb58ed977f9ddb103d9099bccb3dac2e6cd33a47444e5c6eb8a54bb5d117f4",
     "benchmark_scripts/dialog_identity.py": "c259193fea2cd45a079b9c0ea1ff1f4b5ed6a030a965b7c43ee738551b306939",
-    "benchmark_scripts/f_table.py": "bcc2032310067b198b5f74cfefae4a0a8d250afbeac3328bc4cb06c220488085",
+    "benchmark_scripts/f_table.py": "57dd4141d0d320bac277f4b80a56b88d6bded896dc5ea5bf4309b4bac660b248",
     "benchmark_scripts/hosted_audit_receipt.py": "08bd899c6e594e8d055cec247898361a16905a2c263f74219e2912d90852d04f",
     "benchmark_scripts/hosted_completion_audit_receipt.py": "c0cf3091ce96f495bef093b3d386b2b0852fca288f4d94b18fe936337fb45dcc",
+    "benchmark_scripts/layerwise_fidelity.py": "3060d2c577584807176abb4e6c3c6df4b95a373ade8cf749ed7fcfd673b7d2fe",
     "benchmark_scripts/normalize_segment_outputs.py": "663d9c7f2d218995ff60bcc30b2ef17f07ecbc9eec3824abfa5ee476e5061b4c",
-    "benchmark_scripts/open_execution_audit_receipt.py": "87a09c69b582345d8709c7fc933df4fad748e8623d003d483b8be88158c60f4a",
-    "benchmark_scripts/provenance_sources.py": "db9b3469255d2c4724b94bc37d0b46e635f92101924a9de77c6c2c1ae2483e77",
-    "benchmark_scripts/race_multiclass.py": "b139681736b8faf11dcc2fc28c14037c190baf80ff009d227aabdeb07466e1c3",
-    "benchmark_scripts/race_rv.py": "818857ea302849e0b89a3a5287aef551cf25d91f284091dadceda107223cc3ee",
-    "benchmark_scripts/run_benchmark.py": "c4d0555ce2d9687eeb4e84e93ebc8f53d67832989e6cea2b4c31af23d1e3700a",
-    "benchmark_scripts/run_q05_boolq_word_eager_diagnostic.py": "ecf513dfb80ddf830679ac44975cd1ad9faf46e59de01c4a25c347205123ca90",
-    "benchmark_scripts/validate_results.py": "76eb71f37343cd2f8ed885d7cb4fdbe8746e2ef5e1928d2a2e6f383fa87b0db8",
-    "surrogate/attention_scoring.py": "a8f6a8cce01767e4839b0c3684f58481bd1c434acf71707a33814321eaa4b538",
+    "benchmark_scripts/provenance_sources.py": "97f9094e680f29d9cb908ddf64a5df52ba5c30f09d3135bb71459eab29e48317",
+    "benchmark_scripts/race_rv.py": "ea3dc91b4dad50f6f4d82d5ed7b4ed4df9131372e4c71c4ed40deea22c9eccda",
+    "benchmark_scripts/run_benchmark.py": "7e68f08b7ff115240e01cf5d718ec6ccdbfa816981dbb2e7f5783b10a5196980",
+    "benchmark_scripts/run_layerwise.py": "718b4d3e8c8bcd920259f61055217243090afa739748d28b6db78d817d9e27f1",
+    "benchmark_scripts/validate_results.py": "a466ddcbe54ca9f03e2737ba4dc976804e0fdbc20e1e2997e1e3e027bf9b8134",
+    "surrogate/attention_scoring.py": "63cb3535ab296ff952ea3caf57479391d399cf703170d2ece501e549d9393fa3",
+    "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
+    "surrogate/layerwise_scoring.py": "49474e2df6cd66227f3cf538afa371b6798e3632f16e4a31d40988d6ac71411c",
+    "surrogate/model_types.py": "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd",
+    "surrogate/representation_scoring.py": "c574c6cfaa5c9d3b6380129d019ef259f06f19ccb0f01c07def1a60abc391b0c",
+    "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+    "surrogate/transformers_model.py": "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b",
+    "surrogate/transformers_scoring.py": "18a894fd3f0153152162ee7ee4b028f1a673e62468b1a00762ddf8033f71e35e",
+    "surrogate/utils.py": "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638"
+  },
+  "schema_version": 5,
+  "segmentation_scope": "full_dialog_in_message_order",
+  "software": {
+    "numpy": "2.2.1",
+    "pandas": "2.2.3",
+    "torch": "2.15.0a0+fb"
+  },
+  "source_sha256": {
+    "benchmark_scripts/benchmark_config.py": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
+    "benchmark_scripts/run_benchmark.py": "7e68f08b7ff115240e01cf5d718ec6ccdbfa816981dbb2e7f5783b10a5196980",
+    "surrogate/attention_scoring.py": "63cb3535ab296ff952ea3caf57479391d399cf703170d2ece501e549d9393fa3",
     "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
     "surrogate/model_types.py": "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd",
     "surrogate/representation_scoring.py": "c574c6cfaa5c9d3b6380129d019ef259f06f19ccb0f01c07def1a60abc391b0c",
     "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
-    "surrogate/transformers_model.py": "b9fd08fe2ba2f0dbc4dd41b468c9875dfcac2c62373ccadeef1837409dbf10f9",
+    "surrogate/transformers_model.py": "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b",
     "surrogate/transformers_scoring.py": "18a894fd3f0153152162ee7ee4b028f1a673e62468b1a00762ddf8033f71e35e",
-    "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+    "surrogate/utils.py": "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638"
   },
-  "schema_version": 3,
-  "segmentation_scope": "full_dialog_in_message_order",
-  "software": {
-    "cuda_runtime": "13.3.0",
-    "numpy": "2.2.1",
-    "pandas": "2.2.3",
-    "torch": "2.15.0a0+fb",
-    "transformers": "5.5.0"
-  },
-  "source_sha256": {
-    "benchmark_scripts/benchmark_config.py": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
-    "benchmark_scripts/run_benchmark.py": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
-    "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
-    "surrogate/utils.py": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0"
+  "tokenization_verification": {
+    "effective_bos_count": 1,
+    "no_duplicate_special_tokens": true,
+    "verification_method": "explicit_no_special_tokens_after_chat_template"
   }
 }

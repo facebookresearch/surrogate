@@ -37,11 +37,15 @@ results/
 ├── f_table_finite_extreme_sensitivity.tsv.provenance.json
 ├── race_rv.tsv
 ├── race_rv.tsv.provenance.json
+├── layerwise_fidelity.tsv
+├── layerwise_fidelity.tsv.provenance.json
 └── {benchmark}/{pregrouper}/
     ├── segments.tsv.gz
     ├── {model}_segment.tsv.gz
     ├── {model}_tokens.tsv.gz
     ├── {model}_run.json
+    ├── {open_model}_layers.tsv.gz
+    ├── {open_model}_layers_run.json
     └── {model}_canary.json        # selected hosted LAMBADA endpoints
 ```
 
@@ -89,6 +93,14 @@ backends, and output hashes. Hosted receipts contain only portable public
 identifiers, hashes, protocol fields, and aggregate status counts; no service
 implementation or routing identifiers are included.
 
+Open-model run records distinguish the literal tokenizer argument from the
+verified effective tokenization. Qwen's rendered token IDs are verified
+identical with `add_special_tokens` enabled or disabled, and the pinned Qwen
+tokenizer inserts zero BOS tokens. Llama's template contains one BOS, so Llama
+artifacts require `add_special_tokens=false` after chat rendering to avoid
+adding a second one. Sealing checks these properties against each pinned
+tokenizer.
+
 ## Canonical analyses
 
 `f_table.tsv` evaluates user-message segment coordinates while retaining the
@@ -103,10 +115,16 @@ Point estimates include signed Spearman and Pearson correlations and Pearson
 `r²`. Segment-level intervals use a prompt-cluster bootstrap. Row pooling
 weights prompts in proportion to their number of jointly observed segments.
 
-The current ANLI artifact does not report E-C `F_align` or
-`F_align_to_attr`: its stored open-model readout projections use another label
-direction, and the validator requires these rows to remain explicitly
-unavailable rather than being relabeled.
+ANLI E-C `F_align` and `F_align_to_attr` use the requested sum-unembedding
+direction from the final decoder block in the cryptographically bound layer
+artifacts. This is not a relabeling of the ordinary E-N projection. Contrasts
+whose ordinary readout already matches retain the ordinary segment-table
+implementation. Final-layer `F_pred` and `F_attr` are diagnostically compared
+with the ordinary BF16-token reconstruction during F-table generation. Release
+validation requires exact coverage, constrains each raw label contrast within
+`1e-4`, constrains Pearson endpoints within `1e-4`, and constrains Spearman
+endpoints within `1e-3` to allow rank swaps among BF16-near-ties. Canonical
+layer runs record BF16, SDPA, automatic device placement, and batch size 32.
 
 `f_table_finite_extreme_sensitivity.tsv` uses the same cohort, coordinates,
 contrasts, and aggregation. It differs only by replacing hosted infinities just
@@ -117,6 +135,17 @@ remain missing. This is a sensitivity analysis, not the primary estimate.
 centered RV coefficient for prediction and attribution vectors over the six
 pairwise A-D margins. Hosted comparisons use model-pair-specific finite
 complete cases with explicit observation and prompt coverage.
+
+`layerwise_fidelity.tsv` reports open-model `F_pred` and signed `F_attr` at
+matched relative decoder depth for BoolQ and ANLI R1-R3. Its compact raw layer
+artifacts retain scores for every label and all full-dialog segment coordinates,
+so ANLI entailment-minus-contradiction and entailment-minus-neutral, along with
+all/system/user scopes, remain available post hoc. No hidden-state vectors are
+stored. The included unembedding projections use a uniform sum over accepted
+single-token label aliases and are identified as a diagnostic approximation to
+the grouped-logsumexp attribution direction. The canonical table uses linear
+interpolation across native decoder blocks; `--depth-alignment nearest_native`
+provides an unsmoothed post-hoc sensitivity without another model run.
 
 ## Reproduction
 
@@ -138,6 +167,7 @@ python -m benchmark_scripts.f_table \
     --api-infinity-policy finite_extreme \
     --output results/f_table_finite_extreme_sensitivity.tsv
 python -m benchmark_scripts.race_rv
+python -m benchmark_scripts.layerwise_fidelity
 
 python -m benchmark_scripts.validate_results \
     --results-dir results --cohort paper --require-derived --skip-manifest

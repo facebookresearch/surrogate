@@ -255,7 +255,7 @@ class TestDerivedProvenance(TestCase):
         self.assertEqual(payload["generator"]["module"], generator)
         self.assertEqual(payload["output"]["sha256"], sha256_file(output_path))
         self.assertTrue(any("/raw/" in identifier for identifier in payload["inputs"]))
-        self.assertEqual(
-            set(payload["supporting_sources"]),
-            set(DERIVED_SUPPORTING_SOURCE_FILES),
-        )
+        expected_sources: set[str] = set(DERIVED_SUPPORTING_SOURCE_FILES)
+        if generator == "benchmark_scripts.f_table":
+            expected_sources.add("benchmark_scripts/layerwise_fidelity.py")
+        self.assertEqual(set(payload["supporting_sources"]), expected_sources)

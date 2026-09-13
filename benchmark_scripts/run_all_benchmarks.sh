@@ -4,7 +4,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-# Run the five open models on the audited corrected benchmark configurations.
+# Run the five open models on the audited benchmark configurations.
 #
 # Set DATASET_DIR to a directory containing the frozen TSV names documented in
 # results/README.md to reproduce the audited dataset snapshots. Live
@@ -100,6 +100,34 @@ race sentence -
 boolq word 10000
 lambada word 10000
 EOF
+}
+
+run_layer_model() {
+    local gpu="$1"
+    local model="$2"
+    local model_set="$3"
+    local benchmark data_file
+    for benchmark in anli_r1 anli_r2 anli_r3 boolq; do
+        data_file="$(dataset_file_for "$benchmark")"
+        local args=(
+            -m benchmark_scripts.run_layerwise
+            --benchmark "$benchmark"
+            --pregrouper sentence
+            --batch-size 32
+            --seed 42
+            --model-set "$model_set"
+            --models "$model"
+            --results-dir "$RESULTS_DIR"
+        )
+        if [[ "$ALLOW_RESUME" == "1" ]]; then
+            args+=(--overwrite-existing)
+        fi
+        if [[ -n "$data_file" ]]; then
+            args+=(--dataset-file "$data_file")
+        fi
+        echo "[$(date)] GPU $gpu: layerwise $benchmark/sentence $model"
+        CUDA_VISIBLE_DEVICES="$gpu" "$PYTHON_BIN" "${args[@]}"
+    done
 }
 
 # Establish the model-independent segment grids before parallel workers start.
@@ -208,6 +236,31 @@ qwen2.5-14b-instruct Qwen2.5-14B-Instruct
 llama-3.1-8b-instruct Meta-Llama-3.1-8B-Instruct
 EOF
 
+# Generate the complete scalar-only layer matrix required by the canonical
+# ANLI alignment and matched-depth analyses.
+(
+    run_layer_model 0 llama-3.1-8b-instruct Llama3.1-Instruct
+    run_layer_model 0 qwen2.5-7b-instruct Qwen2.5-Instruct
+    run_layer_model 0 qwen2.5-0.5b-instruct Qwen2.5-Instruct
+) &
+layer_worker_0=$!
+(
+    run_layer_model 1 qwen2.5-14b-instruct Qwen2.5-Instruct
+    run_layer_model 1 qwen2.5-3b-instruct Qwen2.5-Instruct
+) &
+layer_worker_1=$!
+
+layer_worker_failed=0
+for worker in "$layer_worker_0" "$layer_worker_1"; do
+    if ! wait "$worker"; then
+        layer_worker_failed=1
+    fi
+done
+if [[ "$layer_worker_failed" != 0 ]]; then
+    echo "At least one layerwise GPU worker failed" >&2
+    exit 1
+fi
+
 cohort="paper"
 for config in \
     boolq/sentence boolq/word \
@@ -249,6 +302,9 @@ fi
     --results-dir "$RESULTS_DIR" \
     --output "$RESULTS_DIR/race_rv${suffix}.tsv" \
     --cohort "$cohort"
+"$PYTHON_BIN" -m benchmark_scripts.layerwise_fidelity \
+    --results-dir "$RESULTS_DIR" \
+    --output "$RESULTS_DIR/layerwise_fidelity.tsv"
 
 "$PYTHON_BIN" -m benchmark_scripts.validate_results \
     --results-dir "$RESULTS_DIR" --cohort "$cohort" --require-derived \

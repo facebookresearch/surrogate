@@ -8,6 +8,7 @@
 import json
 import os
 import tempfile
+from types import SimpleNamespace
 from contextlib import redirect_stdout
 from io import StringIO
 from unittest import TestCase
@@ -18,6 +19,7 @@ import pandas as pd
 from scipy.stats import rankdata
 
 from benchmark_scripts.f_table import (
+    _analysis_jobs,
     _bootstrap_corrs,
     _clamp_api_infinities,
     _emit_pair_corrs,
@@ -26,6 +28,7 @@ from benchmark_scripts.f_table import (
     _filter_segment_frame,
     _mask_unsupported_signals,
     _contrast_metadata,
+    _derived_input_paths,
     _resolved_contrast,
     _resolved_scope,
     main,
@@ -34,6 +37,7 @@ from benchmark_scripts.f_table import (
     _process_benchmark,
     _readout_matches_contrast,
     _unsupported_model_components,
+    _uses_layer_readout,
     _weighted_correlation,
     _weighted_ranks,
 )
@@ -49,6 +53,27 @@ class TestFTable(TestCase):
             main()
 
         self.assertEqual(raised.exception.code, 0)
+
+    def test_analysis_jobs_preserve_explicit_anli_contrasts(self) -> None:
+        jobs = _analysis_jobs(
+            [("anli_r1", "sentence")],
+            ["user"],
+            ["canonical", "entailment_neutral", "entailment_contradiction"],
+            "entailment_contradiction",
+        )
+
+        self.assertEqual(
+            jobs,
+            [
+                (
+                    "anli_r1",
+                    "sentence",
+                    "user",
+                    "entailment_contradiction",
+                ),
+                ("anli_r1", "sentence", "user", "entailment_neutral"),
+            ],
+        )
 
     def test_unsupported_components_are_masked_independently(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -299,6 +324,7 @@ class TestFTable(TestCase):
         self.assertFalse(
             _readout_matches_contrast("anli_r1", "entailment_contradiction")
         )
+        self.assertTrue(_uses_layer_readout("anli_r1", "entailment_contradiction"))
 
     def test_resolved_metadata_is_metric_specific(self) -> None:
         self.assertEqual(
@@ -323,6 +349,14 @@ class TestFTable(TestCase):
             ),
         )
         self.assertEqual(
+            _contrast_metadata("anli_r1", "entailment_contradiction", "F_align"),
+            (
+                "entailment_minus_contradiction",
+                "entailment_minus_contradiction",
+                "entailment_minus_contradiction",
+            ),
+        )
+        self.assertEqual(
             _contrast_metadata(
                 "anli_r1", "entailment_contradiction", "F_attn_mean_to_attr"
             ),
@@ -331,6 +365,151 @@ class TestFTable(TestCase):
                 "entailment_minus_contradiction",
                 "not_applicable",
             ),
+        )
+
+    def test_anli_ec_alignment_uses_final_layer_readout(self) -> None:
+        with tempfile.TemporaryDirectory() as results_dir:
+            segment_rows: list[dict[str, object]] = []
+            logodds_rows: list[dict[str, object]] = []
+            for model in ("a", "b"):
+                for prompt_idx in range(3):
+                    segment_rows.append(
+                        {"model": model, "prompt_idx": prompt_idx, "seg_idx": 0}
+                    )
+                    original: float = float(prompt_idx + 1)
+                    logodds_rows.extend(
+                        [
+                            {
+                                "model": model,
+                                "prompt_idx": prompt_idx,
+                                "seg_idx": np.nan,
+                                "kind": "orig",
+                                "logodds_entailment_contradiction": original,
+                            },
+                            {
+                                "model": model,
+                                "prompt_idx": prompt_idx,
+                                "seg_idx": 0,
+                                "kind": "ablated",
+                                "logodds_entailment_contradiction": (
+                                    original - float(prompt_idx + 1)
+                                ),
+                            },
+                        ]
+                    )
+            pd.DataFrame(segment_rows).to_csv(
+                os.path.join(results_dir, "anli_r1_sentence_segments.tsv"),
+                sep="\t",
+                index=False,
+            )
+            pd.DataFrame(logodds_rows).to_csv(
+                os.path.join(results_dir, "anli_r1_sentence_logodds.tsv"),
+                sep="\t",
+                index=False,
+            )
+
+            def final_readout(
+                _results_dir: str,
+                _benchmark: str,
+                _pregrouper: str,
+                model: str,
+                _scope: str,
+                _contrast: str,
+            ) -> SimpleNamespace:
+                values: list[float] = [0.0, 1.0, 2.0]
+                if model == "b":
+                    values = [0.0, 2.0, 1.0]
+                return SimpleNamespace(
+                    alignment=pd.Series(
+                        values,
+                        index=pd.MultiIndex.from_tuples(
+                            [(idx, 0) for idx in range(3)],
+                            names=["prompt_idx", "seg_idx"],
+                        ),
+                    ),
+                    prediction=pd.Series([1.0, 2.0, 3.0], index=range(3)),
+                    attribution=pd.Series(
+                        [1.0, 2.0, 3.0],
+                        index=pd.MultiIndex.from_tuples(
+                            [(idx, 0) for idx in range(3)],
+                            names=["prompt_idx", "seg_idx"],
+                        ),
+                    ),
+                )
+
+            with (
+                patch("benchmark_scripts.f_table.OPEN_MODELS", ("a", "b")),
+                patch(
+                    "benchmark_scripts.layerwise_fidelity.load_final_layer_readout",
+                    side_effect=final_readout,
+                ),
+            ):
+                result = _process_benchmark(
+                    "anli_r1",
+                    "sentence",
+                    results_dir,
+                    n_resamples=10,
+                    conf=0.95,
+                    rng=np.random.default_rng(42),
+                    cohort=("a", "b"),
+                    scope="all",
+                    contrast="entailment_contradiction",
+                    bootstrap_seed=42,
+                    requested_metrics={"F_align"},
+                )
+
+        alignment = [row for row in result if row["metric"] == "F_align"]
+        self.assertEqual(len(alignment), 3)
+        self.assertTrue(
+            all(row["availability_status"] == "available" for row in alignment)
+        )
+        self.assertTrue(
+            all(
+                row["readout_contrast"] == "entailment_minus_contradiction"
+                for row in alignment
+            )
+        )
+
+    def test_f_table_provenance_binds_only_used_layer_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as results_dir:
+            config_dir: str = os.path.join(results_dir, "anli_r1", "sentence")
+            os.makedirs(config_dir)
+            model: str = "qwen2.5-7b-instruct"
+            filenames: tuple[str, ...] = (
+                "segments.tsv.gz",
+                f"{model}_segment.tsv.gz",
+                f"{model}_run.json",
+                f"{model}_layers.tsv.gz",
+                f"{model}_layers_run.json",
+            )
+            for filename in filenames:
+                with open(os.path.join(config_dir, filename), "wb") as output:
+                    output.write(filename.encode("utf-8"))
+
+            ordinary = _derived_input_paths(
+                results_dir,
+                [("anli_r1", "sentence")],
+                (model,),
+            )
+            layer_bound = _derived_input_paths(
+                results_dir,
+                [("anli_r1", "sentence")],
+                (model,),
+                {("anli_r1", "sentence")},
+            )
+
+        self.assertFalse(any("layers" in identifier for identifier in ordinary))
+        self.assertTrue(
+            any(
+                identifier.endswith(f"/{model}_layers.tsv.gz")
+                for identifier in layer_bound
+            )
+        )
+        self.assertTrue(
+            any(
+                identifier.endswith(f"/{model}_layers_run.json")
+                for identifier in layer_bound
+            )
         )
 
     def test_cell_keyed_bootstrap_is_invariant_to_unavailable_preceding_pair(
