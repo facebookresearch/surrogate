@@ -50,20 +50,6 @@ class TestFTable(TestCase):
 
         self.assertEqual(raised.exception.code, 0)
 
-    def test_revision_candidate_requires_explicit_combined_estimand(self) -> None:
-        with (
-            patch(
-                "sys.argv",
-                [
-                    "f_table",
-                    "--revision-candidate",
-                    "declared_method_pairwise_drop",
-                ],
-            ),
-            self.assertRaisesRegex(ValueError, "Revision candidates require"),
-        ):
-            main()
-
     def test_unsupported_components_are_masked_independently(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config_dir: str = os.path.join(directory, "lambada", "word")
@@ -153,7 +139,7 @@ class TestFTable(TestCase):
         self.assertAlmostEqual(float(points["pearson_r"]), 0.0)
         self.assertAlmostEqual(float(points["pearson_r2"]), 1.0)
 
-    def test_published_transfer_is_row_pooled(self) -> None:
+    def test_default_transfer_is_row_pooled(self) -> None:
         index = pd.MultiIndex.from_tuples(
             [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)],
             names=["prompt_idx", "seg_idx"],

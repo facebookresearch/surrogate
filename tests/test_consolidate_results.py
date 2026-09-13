@@ -24,7 +24,6 @@ from benchmark_scripts.run_benchmark import (
     _write_per_model_outputs,
     EXECUTION_SOURCE_FILES,
 )
-from benchmark_scripts.run_q05_boolq_word_eager_diagnostic import _eager_backend
 
 
 class TestConsolidate(TestCase):
@@ -173,12 +172,6 @@ class TestConsolidate(TestCase):
         self.assertEqual(_attention_implementation_for_phase("ablation"), "sdpa")
         with self.assertRaisesRegex(ValueError, "Unknown phase"):
             _attention_implementation_for_phase("unknown")
-
-    def test_eager_diagnostic_forces_only_known_phases(self) -> None:
-        self.assertEqual(_eager_backend("attention"), "eager")
-        self.assertEqual(_eager_backend("ablation"), "eager")
-        with self.assertRaisesRegex(ValueError, "Unknown phase"):
-            _eager_backend("unknown")
 
     def test_gold_script_requests_both_phases_explicitly(self) -> None:
         script_path: str = os.path.join(

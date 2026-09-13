@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock, patch
 
 import pandas as pd
 
-from benchmark_scripts import reconcile_results
 from benchmark_scripts.derived_provenance import (
     collect_result_inputs,
     write_derived_provenance,
@@ -38,13 +37,6 @@ from benchmark_scripts.hosted_completion_audit_receipt import (
     projection_summary as completion_projection_summary,
 )
 from benchmark_scripts.import_hosted_results import import_results
-from benchmark_scripts.reconcile_results import (
-    CLAIM_COLUMNS,
-    LEDGER_COLUMNS,
-    archive_checks_sha256,
-    archive_ledger_sha256,
-    historical_claims_sha256,
-)
 from benchmark_scripts.provenance_sources import (
     GOLD_HOSTED_CLASSIFICATION_AUDIT_RECEIPT_SHA256,
     GOLD_HOSTED_COMPLETION_AUDIT_RECEIPT_SHA256,
@@ -53,10 +45,6 @@ from benchmark_scripts.provenance_sources import (
     GOLD_OPEN_MODEL_REPOSITORIES,
     GOLD_OPEN_MODEL_REVISIONS,
     HOSTED_RECORD_SOURCE_FILES,
-    RECONCILIATION_ARCHIVE_SHA256,
-    RECONCILIATION_ARCHIVE_SIZE_BYTES,
-    RECONCILIATION_RACE_RAW_SHA256,
-    RECONCILIATION_RACE_RAW_SIZE_BYTES,
     canonical_file_hash_manifest_sha256,
 )
 from benchmark_scripts.validate_results import (
@@ -81,7 +69,6 @@ from benchmark_scripts.validate_results import (
     _validate_open_model_identity,
     _validate_open_model_identity_consistency,
     _validate_open_segment_metrics,
-    _validate_reconciliation_outputs,
     _validate_release_inventory,
     _validate_segment_file,
     _write_artifact_manifest,
@@ -1177,704 +1164,6 @@ class TestValidateResults(TestCase):
                     require_gold_manifest=False,
                 )
 
-    def test_reconciliation_bundle_is_hash_bound_and_must_pass(self) -> None:
-        with tempfile.TemporaryDirectory() as results_dir:
-            directory: str = os.path.join(results_dir, "reconciliation")
-            os.makedirs(directory)
-            table_path: str = os.path.join(directory, "reconciliation.tsv")
-            common: dict[str, object] = {
-                "paper_location": "Table 2",
-                "benchmark": "boolq",
-                "pregrouper": "sentence",
-                "pair_set": "all",
-                "metric": "F_pred",
-                "aggregation": "prompt_pooled_then_model_pair_distribution",
-                "value_component": "median",
-                "value": 0.7,
-                "display_value": ".700",
-                "n_pairs": 1,
-                "effective_pairs": ["qwen2.5-0.5b-instruct<->qwen2.5-3b-instruct"],
-            }
-            published: dict[str, object] = reconcile_results._base_row(
-                source_state="published",
-                source_locator="paper/table_2",
-                source_sha256="",
-                data_status="published",
-                **common,
-            )
-            archived: dict[str, object] = reconcile_results._base_row(
-                source_state="archive",
-                source_locator="archive/boolq_sentence_consolidated.tsv",
-                source_sha256="1" * 64,
-                data_status="complete",
-                **common,
-            )
-            corrected: dict[str, object] = reconcile_results._base_row(
-                source_state="corrected",
-                source_locator="corrected/f_table.tsv",
-                source_sha256="2" * 64,
-                data_status="complete",
-                **common,
-            )
-            rows: list[dict[str, object]] = [published, archived, corrected]
-            reconcile_results._attach_comparisons(rows)
-            pd.DataFrame(rows, columns=LEDGER_COLUMNS).to_csv(
-                table_path, sep="\t", index=False
-            )
-            ledger_digest: str = archive_ledger_sha256(table_path)
-            claims_path: str = os.path.join(directory, "historical_claims.tsv")
-            claim: dict[str, object] = reconcile_results._claim_row(
-                claim_id="fixture.claim",
-                claim_group="fixture",
-                source_location="fixture/source",
-                source_state="archive",
-                benchmark="boolq",
-                pregrouper="sentence",
-                segment_grid_id="boolq_sentence_paper_full_dialog",
-                cohort="single_pair",
-                scope="not_applicable",
-                contrast="canonical",
-                representation="scalar_logodds",
-                metric="F_pred",
-                statistic="pearson_r2",
-                aggregation="prompt_level_single_pair",
-                missingness_policy="pairwise_drop_nonfinite",
-                pair_set="single_pair",
-                model_s="qwen2.5-0.5b-instruct",
-                model_t="qwen2.5-3b-instruct",
-                value_component="point",
-                expected_display=".700",
-                expected_value=0.7,
-                tolerance=0.0005,
-                actual_value=0.7,
-                input_locators=["archive/boolq_sentence_consolidated.tsv"],
-                n_pairs=1,
-                n_observations=4,
-                n_prompts=4,
-                effective_pairs=["qwen2.5-0.5b-instruct<->qwen2.5-3b-instruct"],
-            )
-            pd.DataFrame([claim], columns=CLAIM_COLUMNS).to_csv(
-                claims_path, sep="\t", index=False
-            )
-            disposition_path: str = os.path.join(
-                directory, "manuscript_disposition.tsv"
-            )
-            pd.DataFrame(
-                reconcile_results.manuscript_dispositions(),
-                columns=reconcile_results.MANUSCRIPT_DISPOSITION_COLUMNS,
-            ).sort_values("issue_id", kind="stable").to_csv(
-                disposition_path, sep="\t", index=False
-            )
-            claims_digest: str = historical_claims_sha256(claims_path)
-            audited_claim_digest: str = reconcile_results.audited_claim_set_sha256(
-                [published], [claim]
-            )
-            claims_digest_patch = patch(
-                "benchmark_scripts.validate_results."
-                "RECONCILIATION_HISTORICAL_CLAIMS_SHA256",
-                claims_digest,
-            )
-            claims_digest_patch.start()
-            self.addCleanup(claims_digest_patch.stop)
-            audited_digest_patch = patch(
-                "benchmark_scripts.validate_results."
-                "RECONCILIATION_AUDITED_CLAIM_SET_SHA256",
-                audited_claim_digest,
-            )
-            audited_digest_patch.start()
-            self.addCleanup(audited_digest_patch.stop)
-            checks_path: str = os.path.join(directory, "reconciliation_checks.json")
-            checks: dict[str, object] = {
-                "schema_version": reconcile_results.SCHEMA_VERSION,
-                "artifact_type": "reconciliation_checks",
-                "all_passed": True,
-                "checks": [
-                    {
-                        "check_id": check_id,
-                        "kind": (
-                            "corrected_provenance"
-                            if check_id.startswith("derived_sidecar_")
-                            else "fixture"
-                        ),
-                        "locator": "reconciliation.tsv",
-                        "expected": 0,
-                        "actual": 0,
-                        "tolerance": 0,
-                        "passed": True,
-                    }
-                    for check_id in (
-                        f"published_rounding:{archived['reconciliation_id']}",
-                        "archive_pair_grid:Table2:boolq:sentence:F_pred:all",
-                        "archive_byte_sha256:reconciliation_models",
-                        "archive_ledger_sha256",
-                        "audited_claim_set_sha256",
-                        "historical_claims_sha256",
-                        "historical_claim:fixture.claim",
-                        "nonmatching_estimands_have_no_delta",
-                        "archive_byte_sha256:boolq:sentence",
-                        "archive_byte_sha256:anli_r1:sentence",
-                        "archive_byte_sha256:anli_r2:sentence",
-                        "archive_byte_sha256:anli_r3:sentence",
-                        "archive_byte_sha256:winogrande:sentence",
-                        "archive_byte_sha256:boolq:word",
-                        "archive_byte_sha256:lambada:word",
-                        "archive_byte_sha256:race:sentence",
-                        "archive_rows:boolq:sentence",
-                        "archive_rows:anli_r1:sentence",
-                        "archive_rows:anli_r2:sentence",
-                        "archive_rows:anli_r3:sentence",
-                        "archive_rows:winogrande:sentence",
-                        "archive_rows:boolq:word",
-                        "archive_rows:lambada:word",
-                        "archive_rows:race:sentence",
-                        "historical_numeric:boolq:sentence:F_pred",
-                        "historical_numeric:boolq:sentence:F_attr",
-                        "historical_numeric:race:sentence:F_pred",
-                        "historical_numeric:race:sentence:F_attr",
-                        "historical_numeric:boolq:qwen7b_qwen14b:F_attr",
-                        "derived_sidecar_output:corrected/f_table.tsv",
-                        "derived_sidecar_input:corrected/f_table.tsv:fixture",
-                        "derived_sidecar_output:corrected/f_table_prompt_equal_transfer.tsv",
-                        "derived_sidecar_input:corrected/f_table_prompt_equal_transfer.tsv:fixture",
-                        "derived_sidecar_output:corrected/race_scalar_paper_compatibility.tsv",
-                        "derived_sidecar_input:corrected/race_scalar_paper_compatibility.tsv:fixture",
-                        *(
-                            f"archive_byte_sha256:{locator.removeprefix('archive/')}"
-                            for locator in RECONCILIATION_RACE_RAW_SHA256
-                        ),
-                        *(
-                            f"archive_size_bytes:{locator.removeprefix('archive/')}"
-                            for locator in RECONCILIATION_RACE_RAW_SIZE_BYTES
-                        ),
-                    )
-                ],
-            }
-            for check in cast(list[dict[str, object]], checks["checks"]):
-                if check["check_id"] == "historical_claim:fixture.claim":
-                    check.update(
-                        expected=0.7,
-                        actual=0.7,
-                        tolerance=0.0005,
-                        passed=True,
-                    )
-            with open(checks_path, "w", encoding="utf-8") as output:
-                json.dump(checks, output)
-            check_digest: str = archive_checks_sha256(
-                cast(list[dict[str, object]], checks["checks"])
-            )
-            corrected_check_rows: list[dict[str, object]] = [
-                dict(check)
-                for check in cast(list[dict[str, object]], checks["checks"])
-                if str(check["check_id"]).startswith("derived_sidecar_")
-            ]
-
-            corrected_names: tuple[str, ...] = (
-                "f_table.tsv",
-                "f_table.tsv.provenance.json",
-                "f_table_prompt_equal_transfer.tsv",
-                "f_table_prompt_equal_transfer.tsv.provenance.json",
-                "f_table_revision_candidate_pairwise_drop.tsv",
-                "f_table_revision_candidate_pairwise_drop.tsv.provenance.json",
-                "f_table_revision_candidate_finite_extreme.tsv",
-                "f_table_revision_candidate_finite_extreme.tsv.provenance.json",
-                "race_scalar_paper_compatibility.tsv",
-                "race_scalar_paper_compatibility.tsv.provenance.json",
-                "race/sentence/segments.tsv.gz",
-                *(f"race/sentence/{model}_segment.tsv.gz" for model in OPEN_MODELS),
-            )
-            inputs: dict[str, dict[str, str | int]] = {}
-            for name in corrected_names:
-                path: str = os.path.join(results_dir, name)
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                with open(path, "wb") as output:
-                    output.write(name.encode("utf-8"))
-                inputs[f"corrected/{name}"] = {
-                    "sha256": hashlib.sha256(name.encode("utf-8")).hexdigest(),
-                    "size_bytes": len(name.encode("utf-8")),
-                }
-            for name in (
-                "reconciliation_models.json",
-                "boolq_sentence_consolidated.tsv",
-                "anli_r1_sentence_consolidated.tsv",
-                "anli_r2_sentence_consolidated.tsv",
-                "anli_r3_sentence_consolidated.tsv",
-                "winogrande_sentence_consolidated.tsv",
-                "boolq_word_consolidated.tsv",
-                "lambada_word_consolidated.tsv",
-                "race_sentence_consolidated.tsv",
-            ):
-                locator: str = f"archive/{name}"
-                inputs[f"archive/{name}"] = {
-                    "sha256": RECONCILIATION_ARCHIVE_SHA256[locator],
-                    "size_bytes": RECONCILIATION_ARCHIVE_SIZE_BYTES[locator],
-                }
-            for locator, digest in RECONCILIATION_RACE_RAW_SHA256.items():
-                inputs[locator] = {
-                    "sha256": digest,
-                    "size_bytes": RECONCILIATION_RACE_RAW_SIZE_BYTES[locator],
-                }
-            repository_root: str = os.path.dirname(os.path.dirname(__file__))
-            generator_path: str = os.path.join(
-                repository_root, "benchmark_scripts/reconcile_results.py"
-            )
-            manifest: dict[str, object] = {
-                "schema_version": reconcile_results.SCHEMA_VERSION,
-                "artifact_type": "result_reconciliation",
-                "generator": {
-                    "locator": "benchmark_scripts/reconcile_results.py",
-                    "sha256": _sha256(generator_path),
-                },
-                "historical_estimand": {
-                    "statistic": "pearson_r2",
-                    "missingness_policy": "pairwise_drop_nonfinite",
-                    "prediction_scope": "not_applicable",
-                    "segment_level_declared_scope": "user",
-                    "segment_level_executed_scope": "all",
-                    "anli_declared_contrast": "entailment_contradiction",
-                    "anli_executed_contrast": "entailment_neutral",
-                },
-                "paper_reference": {
-                    "reference_id": reconcile_results.PAPER_REFERENCE_ID,
-                    "work_id": "arXiv:2606.32008",
-                    "version": None,
-                    "pdf_sha256": None,
-                    "identity_status": reconcile_results.PAPER_IDENTITY_STATUS,
-                    "claim_canonicalization": (
-                        reconcile_results.PAPER_CLAIM_CANONICALIZATION
-                    ),
-                    "audited_claim_set_sha256": audited_claim_digest,
-                    "claim_scope": (
-                        "Tables 1-2 plus explicitly enumerated Figure 13 and "
-                        "main-text numerical claims"
-                    ),
-                },
-                "race_caveat": reconcile_results.RACE_NOTE,
-                "boolq_word_attention_caveat": (
-                    reconcile_results.BOOLQ_WORD_ATTENTION_NOTE
-                ),
-                "model_identity_caveat": reconcile_results.MODEL_IDENTITY_NOTE,
-                "software": {
-                    "python": "test",
-                    "python_implementation": "test",
-                    "numpy": "test",
-                    "pandas": "test",
-                },
-                "inputs": inputs,
-                "archive_provenance": {
-                    "kind": "raw_archive_snapshot_bytes",
-                    "enforced": True,
-                    "trusted_sha256": dict(
-                        sorted(RECONCILIATION_ARCHIVE_SHA256.items())
-                    ),
-                    "trusted_size_bytes": dict(
-                        sorted(RECONCILIATION_ARCHIVE_SIZE_BYTES.items())
-                    ),
-                    "trusted_race_raw_sha256": dict(
-                        sorted(RECONCILIATION_RACE_RAW_SHA256.items())
-                    ),
-                    "trusted_race_raw_size_bytes": dict(
-                        sorted(RECONCILIATION_RACE_RAW_SIZE_BYTES.items())
-                    ),
-                    "sanitized_ledger_sha256": ledger_digest,
-                    "sanitized_checks_sha256": check_digest,
-                    "historical_claims_sha256": claims_digest,
-                    "audited_claim_set_sha256": audited_claim_digest,
-                },
-                "outputs": {
-                    "reconciliation.tsv": {
-                        "sha256": _sha256(table_path),
-                        "size_bytes": os.path.getsize(table_path),
-                    },
-                    "historical_claims.tsv": {
-                        "sha256": _sha256(claims_path),
-                        "size_bytes": os.path.getsize(claims_path),
-                    },
-                    "manuscript_disposition.tsv": {
-                        "sha256": _sha256(disposition_path),
-                        "size_bytes": os.path.getsize(disposition_path),
-                    },
-                    "reconciliation_checks.json": {
-                        "sha256": _sha256(checks_path),
-                        "size_bytes": os.path.getsize(checks_path),
-                    },
-                },
-            }
-            manifest_path: str = os.path.join(directory, "reconciliation_manifest.json")
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-
-            with (
-                patch(
-                    "benchmark_scripts.validate_results._published_rows",
-                    return_value=[published],
-                ),
-                patch(
-                    "benchmark_scripts.validate_results._corrected_rows",
-                    return_value=([corrected], corrected_check_rows, {}),
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                    check_digest,
-                ),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-
-            manifest_outputs: dict[str, object] = cast(
-                dict[str, object], manifest["outputs"]
-            )
-            with open(claims_path, "rb") as source:
-                original_claims: bytes = source.read()
-            tampered_claims: pd.DataFrame = pd.read_csv(claims_path, sep="\t")
-            tampered_claims.loc[0, "actual_value"] = 0.6
-            tampered_claims.to_csv(claims_path, sep="\t", index=False)
-            manifest_outputs["historical_claims.tsv"] = {
-                "sha256": _sha256(claims_path),
-                "size_bytes": os.path.getsize(claims_path),
-            }
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with (
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "Historical-claims digest"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            with open(claims_path, "wb") as output:
-                output.write(original_claims)
-            manifest_outputs["historical_claims.tsv"] = {
-                "sha256": _sha256(claims_path),
-                "size_bytes": os.path.getsize(claims_path),
-            }
-            checks["private_path"] = "/private/checks"
-            with open(checks_path, "w", encoding="utf-8") as output:
-                json.dump(checks, output)
-            manifest_outputs["reconciliation_checks.json"] = {
-                "sha256": _sha256(checks_path),
-                "size_bytes": os.path.getsize(checks_path),
-            }
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with (
-                patch(
-                    "benchmark_scripts.validate_results._published_rows",
-                    return_value=[published],
-                ),
-                patch(
-                    "benchmark_scripts.validate_results._corrected_rows",
-                    return_value=([corrected], corrected_check_rows, {}),
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                    check_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "did not all pass"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            del checks["private_path"]
-            with open(checks_path, "w", encoding="utf-8") as output:
-                json.dump(checks, output)
-            manifest_outputs["reconciliation_checks.json"] = {
-                "sha256": _sha256(checks_path),
-                "size_bytes": os.path.getsize(checks_path),
-            }
-            injected_input: dict[str, str | int] = inputs[
-                "archive/boolq_sentence_consolidated.tsv"
-            ]
-            injected_input["source_path"] = "/private/archive"
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with (
-                patch(
-                    "benchmark_scripts.validate_results._published_rows",
-                    return_value=[published],
-                ),
-                patch(
-                    "benchmark_scripts.validate_results._corrected_rows",
-                    return_value=([corrected], corrected_check_rows, {}),
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                    check_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "input seal"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            del injected_input["source_path"]
-
-            software: dict[str, str] = cast(dict[str, str], manifest["software"])
-            software["python"] = "/private/python"
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with (
-                patch(
-                    "benchmark_scripts.validate_results._published_rows",
-                    return_value=[published],
-                ),
-                patch(
-                    "benchmark_scripts.validate_results._corrected_rows",
-                    return_value=([corrected], corrected_check_rows, {}),
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                    check_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "software metadata"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            software["python"] = "test"
-
-            archive_input: dict[str, str | int] = inputs[
-                "archive/boolq_sentence_consolidated.tsv"
-            ]
-            archive_input["size_bytes"] = cast(int, archive_input["size_bytes"]) + 1
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with (
-                patch(
-                    "benchmark_scripts.validate_results._published_rows",
-                    return_value=[published],
-                ),
-                patch(
-                    "benchmark_scripts.validate_results._corrected_rows",
-                    return_value=([corrected], corrected_check_rows, {}),
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                    check_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "archive digest disagrees"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            archive_input["size_bytes"] = RECONCILIATION_ARCHIVE_SIZE_BYTES[
-                "archive/boolq_sentence_consolidated.tsv"
-            ]
-
-            with open(table_path, "rb") as source:
-                original_table: bytes = source.read()
-            archive_tamper: pd.DataFrame = pd.read_csv(
-                table_path, sep="\t", dtype=str, keep_default_na=False
-            )
-            archive_tamper.loc[archive_tamper["source_state"] == "archive", "value"] = (
-                "0.701"
-            )
-            archive_tamper.loc[
-                archive_tamper["source_state"] == "archive", "delta_from_published"
-            ] = "0.001"
-            archive_tamper.to_csv(table_path, sep="\t", index=False)
-            manifest_outputs["reconciliation.tsv"] = {
-                "sha256": _sha256(table_path),
-                "size_bytes": os.path.getsize(table_path),
-            }
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with (
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "archive ledger digest"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            with open(table_path, "wb") as output:
-                output.write(original_table)
-
-            published_tamper: pd.DataFrame = pd.read_csv(
-                table_path, sep="\t", dtype=str, keep_default_na=False
-            )
-            published_tamper.loc[
-                published_tamper["source_state"] == "published", "note"
-            ] = "private metadata"
-            published_tamper.to_csv(table_path, sep="\t", index=False)
-            manifest_outputs["reconciliation.tsv"] = {
-                "sha256": _sha256(table_path),
-                "size_bytes": os.path.getsize(table_path),
-            }
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with (
-                patch(
-                    "benchmark_scripts.validate_results._published_rows",
-                    return_value=[published],
-                ),
-                patch(
-                    "benchmark_scripts.validate_results._corrected_rows",
-                    return_value=([corrected], corrected_check_rows, {}),
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                    check_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "Published cell metadata"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            with open(table_path, "wb") as output:
-                output.write(original_table)
-
-            tampered_table: pd.DataFrame = pd.read_csv(
-                table_path, sep="\t", dtype=str, keep_default_na=False
-            )
-            tampered_table.loc[
-                tampered_table["source_state"] == "corrected", "method_id"
-            ] = "method-v1:forged"
-            tampered_table.to_csv(table_path, sep="\t", index=False)
-            tampered_ledger_digest: str = archive_ledger_sha256(table_path)
-            manifest_archive: dict[str, object] = cast(
-                dict[str, object], manifest["archive_provenance"]
-            )
-            manifest_archive["sanitized_ledger_sha256"] = tampered_ledger_digest
-            manifest_outputs["reconciliation.tsv"] = {
-                "sha256": _sha256(table_path),
-                "size_bytes": os.path.getsize(table_path),
-            }
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with (
-                patch(
-                    "benchmark_scripts.validate_results._published_rows",
-                    return_value=[published],
-                ),
-                patch(
-                    "benchmark_scripts.validate_results._corrected_rows",
-                    return_value=([corrected], corrected_check_rows, {}),
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    tampered_ledger_digest,
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                    check_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "estimand ID"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            with open(table_path, "wb") as output:
-                output.write(original_table)
-            manifest_outputs["reconciliation.tsv"] = {
-                "sha256": _sha256(table_path),
-                "size_bytes": os.path.getsize(table_path),
-            }
-            manifest_archive["sanitized_ledger_sha256"] = ledger_digest
-            inputs["archive/boolq_sentence_consolidated.tsv"]["sha256"] = "0" * 64
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with self.assertRaisesRegex(ValueError, "archive digest disagrees"):
-                with (
-                    patch(
-                        "benchmark_scripts.validate_results._published_rows",
-                        return_value=[published],
-                    ),
-                    patch(
-                        "benchmark_scripts.validate_results._corrected_rows",
-                        return_value=([corrected], corrected_check_rows, {}),
-                    ),
-                    patch(
-                        "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                        ledger_digest,
-                    ),
-                    patch(
-                        "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                        check_digest,
-                    ),
-                ):
-                    _validate_reconciliation_outputs(results_dir)
-            inputs["archive/boolq_sentence_consolidated.tsv"]["sha256"] = (
-                RECONCILIATION_ARCHIVE_SHA256["archive/boolq_sentence_consolidated.tsv"]
-            )
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            check_records: list[dict[str, object]] = cast(
-                list[dict[str, object]], checks["checks"]
-            )
-            corrected_check: dict[str, object] = next(
-                check
-                for check in check_records
-                if str(check["check_id"]).startswith("derived_sidecar_output:")
-            )
-            corrected_check["expected"] = "private metadata"
-            with open(checks_path, "w", encoding="utf-8") as output:
-                json.dump(checks, output)
-            manifest_outputs["reconciliation_checks.json"] = {
-                "sha256": _sha256(checks_path),
-                "size_bytes": os.path.getsize(checks_path),
-            }
-            with (
-                patch(
-                    "benchmark_scripts.validate_results._published_rows",
-                    return_value=[published],
-                ),
-                patch(
-                    "benchmark_scripts.validate_results._corrected_rows",
-                    return_value=([corrected], corrected_check_rows, {}),
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                    ledger_digest,
-                ),
-                patch(
-                    "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                    check_digest,
-                ),
-                self.assertRaisesRegex(ValueError, "Corrected provenance check"),
-            ):
-                _validate_reconciliation_outputs(results_dir)
-            corrected_check["expected"] = 0
-            checks["all_passed"] = False
-            with open(checks_path, "w", encoding="utf-8") as output:
-                json.dump(checks, output)
-            manifest_outputs["reconciliation_checks.json"] = {
-                "sha256": _sha256(checks_path),
-                "size_bytes": os.path.getsize(checks_path),
-            }
-            with open(manifest_path, "w", encoding="utf-8") as output:
-                json.dump(manifest, output)
-            with self.assertRaisesRegex(ValueError, "did not all pass"):
-                with (
-                    patch(
-                        "benchmark_scripts.validate_results._published_rows",
-                        return_value=[published],
-                    ),
-                    patch(
-                        "benchmark_scripts.validate_results._corrected_rows",
-                        return_value=([corrected], corrected_check_rows, {}),
-                    ),
-                    patch(
-                        "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_LEDGER_SHA256",
-                        ledger_digest,
-                    ),
-                    patch(
-                        "benchmark_scripts.validate_results.RECONCILIATION_ARCHIVE_CHECKS_SHA256",
-                        check_digest,
-                    ),
-                ):
-                    _validate_reconciliation_outputs(results_dir)
-
     def test_existing_artifact_manifest_detects_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as results_dir:
             artifact_path: str = os.path.join(results_dir, "artifact.tsv.gz")
@@ -1992,31 +1281,6 @@ class TestValidateResults(TestCase):
                 output.write(b"{}")
             _validate_release_inventory(results_dir, "open", require_manifest=True)
 
-    def test_release_inventory_separates_paper_rerun_from_gold_bundle(self) -> None:
-        with tempfile.TemporaryDirectory() as results_dir:
-            expected: set[str] = _allowed_release_files("paper") - {
-                "README.md",
-                "artifact_manifest.json",
-            }
-            expected = {
-                relative
-                for relative in expected
-                if not relative.startswith("reconciliation/")
-                and not relative.endswith("_canary.json")
-            }
-            for relative in expected:
-                path: str = os.path.join(results_dir, relative)
-                os.makedirs(os.path.dirname(path) or results_dir, exist_ok=True)
-                with open(path, "wb") as output:
-                    output.write(b"placeholder")
-            _validate_release_inventory(results_dir, "paper")
-            with self.assertRaisesRegex(ValueError, "Missing files"):
-                _validate_release_inventory(
-                    results_dir,
-                    "paper",
-                    require_reconciliation=True,
-                )
-
     def test_release_inventory_accepts_complete_gold_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as results_dir:
             expected: set[str] = _allowed_release_files("paper") - {
@@ -2027,11 +1291,7 @@ class TestValidateResults(TestCase):
                 os.makedirs(os.path.dirname(path) or results_dir, exist_ok=True)
                 with open(path, "wb") as output:
                     output.write(b"placeholder")
-            _validate_release_inventory(
-                results_dir,
-                "paper",
-                require_reconciliation=True,
-            )
+            _validate_release_inventory(results_dir, "paper")
 
             with open(
                 os.path.join(results_dir, "artifact_manifest.json"), "wb"
@@ -2041,7 +1301,6 @@ class TestValidateResults(TestCase):
                 results_dir,
                 "paper",
                 require_manifest=True,
-                require_reconciliation=True,
             )
 
     def test_derived_sidecar_binds_shipped_raw_inputs_and_output(self) -> None:
@@ -2163,13 +1422,10 @@ class TestValidateResults(TestCase):
             "cohort": "paper",
             "requested_models": list(models),
             "output_models": sorted(models),
-            "api_infinity_policy": "drop",
+            "api_infinity_policy": "pairwise_complete",
             "transfer_aggregation": "row_pooled",
-            "missingness_policy": "pair_specific_finite_row_deletion",
+            "missingness_policy": "pair_specific_complete_case",
             "metrics": None,
-            "artifact_role": "analysis",
-            "candidate_id": None,
-            "selection_status": "not_applicable",
         }
         expected_configs: set[tuple[str, str, str, str]] = {
             ("boolq", "sentence", "all", "canonical")
@@ -2178,7 +1434,7 @@ class TestValidateResults(TestCase):
             parameters,
             expected_configs,
             models,
-            "drop",
+            "pairwise_complete",
             "row_pooled",
             False,
             "f_table.tsv",
@@ -2189,7 +1445,7 @@ class TestValidateResults(TestCase):
                 parameters,
                 expected_configs,
                 models,
-                "drop",
+                "pairwise_complete",
                 "row_pooled",
                 False,
                 "f_table.tsv",
@@ -2198,13 +1454,10 @@ class TestValidateResults(TestCase):
     def test_derived_grid_requires_nan_for_unsupported_model(self) -> None:
         rows: list[dict[str, object]] = []
         for metric in ("F_pred", "F_attr"):
-            for statistic in ("spearman", "pearson_r2"):
+            for statistic in ("spearman", "pearson_r", "pearson_r2"):
                 supported_component: bool = metric == "F_pred"
                 rows.append(
                     {
-                        "artifact_role": "analysis",
-                        "candidate_id": "not_applicable",
-                        "selection_status": "not_applicable",
                         "cohort": "paper",
                         "pair_population": "hosted_hosted",
                         "benchmark": "lambada",
@@ -2229,14 +1482,22 @@ class TestValidateResults(TestCase):
                             if supported_component
                             else "insufficient_joint_observations"
                         ),
-                        "api_infinity_policy": "drop",
+                        "api_infinity_policy": "pairwise_complete",
                         "aggregation": "row_pooled",
                         "model_s": "open",
                         "model_t": "hosted",
                         "metric": metric,
                         "statistic": statistic,
                         "n_observations": 3 if supported_component else 0,
+                        "expected_observations": 3 if supported_component else 0,
+                        "observation_coverage": (
+                            1.0 if supported_component else float("nan")
+                        ),
                         "n_prompts": 3 if supported_component else 0,
+                        "expected_prompts": 3 if supported_component else 0,
+                        "prompt_coverage": (
+                            1.0 if supported_component else float("nan")
+                        ),
                         "f_point": 0.5 if supported_component else float("nan"),
                         "f_lo": 0.4 if supported_component else float("nan"),
                         "f_hi": 0.6 if supported_component else float("nan"),
@@ -2250,7 +1511,7 @@ class TestValidateResults(TestCase):
             {("lambada", "word", "all", "canonical")},
             ("open", "hosted"),
             "results.tsv",
-            "drop",
+            "pairwise_complete",
             "row_pooled",
             set(),
             unsupported,
@@ -2263,7 +1524,7 @@ class TestValidateResults(TestCase):
                 {("lambada", "word", "all", "canonical")},
                 ("open", "hosted"),
                 "results.tsv",
-                "drop",
+                "pairwise_complete",
                 "row_pooled",
                 set(),
                 unsupported,

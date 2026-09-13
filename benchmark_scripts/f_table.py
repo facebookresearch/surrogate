@@ -17,8 +17,8 @@ confidence intervals use a prompt-cluster bootstrap.
 
 Output schema (tab-separated)::
 
-    artifact_role  candidate_id  cohort  benchmark  pregrouper  scope
-    requested_scope  resolved_scope  contrast  requested_contrast
+    cohort  benchmark  pregrouper  scope  requested_scope  resolved_scope
+    contrast  requested_contrast
     resolved_source_contrast  resolved_target_contrast  readout_contrast
     model_s  model_t  metric ...
 
@@ -30,11 +30,13 @@ Output schema (tab-separated)::
       F_align_to_attr, F_mag_to_attr, F_attn_rollout_to_attr,
       F_attn_mean_to_attr, F_attn_max_to_attr
 
-``statistic`` is ``spearman``, ``pearson_r``, or ``pearson_r2``. By default
-the exact 11-model paper cohort is used; ``--all-models`` opts into every
-discovered model. ``--transfer-aggregation prompt_equal_mean_r2`` retains the
-later notebook-source estimand as an explicitly labeled sensitivity.
+``statistic`` is ``spearman``, ``pearson_r``, or ``pearson_r2``. The default
+analysis uses user-message segment coordinates, the entailment-minus-
+contradiction ANLI contrast, pairwise-complete observations, and the fixed
+11-model release cohort. ``--all-models`` opts into every discovered model.
 """
+
+from __future__ import annotations
 
 import argparse
 import hashlib
@@ -940,7 +942,7 @@ def _process_benchmark(
     cohort: tuple[str, ...] | None = PAPER_MODELS,
     scope: str = "all",
     contrast: str = "canonical",
-    api_infinity_policy: str = "drop",
+    api_infinity_policy: str = "pairwise_complete",
     transfer_aggregation: str = "row_pooled",
     bootstrap_seed: int | None = None,
     requested_metrics: set[str] | None = None,
@@ -1227,9 +1229,8 @@ def _process_benchmark(
             )
         )
 
-    # Transfer metrics: the published cells pool all segment rows. The
-    # prompt-equal mean-r² statistic from the later notebook source remains an
-    # explicit sensitivity rather than being conflated with the PDF estimand.
+    # Transfer metrics use pooled segment rows by default. Prompt-equal
+    # mean-r² remains available as an explicitly selected sensitivity.
     if abl_by_model:
         # F_align_to_attr (signed)
         if align_by_model:
@@ -1338,7 +1339,7 @@ def main() -> None:
     parser.add_argument(
         "--scopes",
         nargs="+",
-        default=["all"],
+        default=["user"],
         choices=["all", "system", "user"],
         help="Message-role strata to compute from the same raw artifact.",
     )
@@ -1354,20 +1355,10 @@ def main() -> None:
     parser.add_argument(
         "--anli-contrast",
         choices=["entailment_neutral", "entailment_contradiction"],
-        default=None,
+        default="entailment_contradiction",
         help=(
             "Override the canonical contrast for ANLI configurations while "
             "leaving each non-ANLI benchmark on its canonical contrast."
-        ),
-    )
-    parser.add_argument(
-        "--revision-candidate",
-        choices=["declared_method_pairwise_drop", "declared_method_finite_extreme"],
-        default=None,
-        help=(
-            "Label this output as an undecided revised-manuscript candidate. "
-            "This requires user-segment coordinates, row-pooled aggregation, "
-            "and the entailment-minus-contradiction ANLI contrast."
         ),
     )
     parser.add_argument(
@@ -1401,12 +1392,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--api-infinity-policy",
-        choices=["drop", "finite_extreme"],
-        default="drop",
+        choices=["pairwise_complete", "finite_extreme"],
+        default="pairwise_complete",
         help=(
-            "How to handle hosted top-k infinities. 'drop' reproduces the "
-            "published tables; 'finite_extreme' applies the policy described "
-            "in the paper as a separately labeled sensitivity analysis."
+            "How to handle hosted top-k infinities. 'pairwise_complete' uses "
+            "jointly finite rows; 'finite_extreme' is a separately labeled "
+            "sensitivity analysis."
         ),
     )
     parser.add_argument(
@@ -1414,9 +1405,8 @@ def main() -> None:
         choices=["row_pooled", "prompt_equal_mean_r2"],
         default="row_pooled",
         help=(
-            "Aggregation for cross-level transfer. row_pooled reproduces the "
-            "published PDF; prompt_equal_mean_r2 reproduces the later notebook "
-            "source as a sensitivity analysis."
+            "Aggregation for cross-level transfer. row_pooled is canonical; "
+            "prompt_equal_mean_r2 is an optional sensitivity analysis."
         ),
     )
     parser.add_argument(
@@ -1443,25 +1433,6 @@ def main() -> None:
         if args.benchmarks is not None
         else DEFAULT_BENCHMARK_CONFIGS
     )
-    if args.revision_candidate is not None:
-        expected_policy: str = (
-            "drop"
-            if args.revision_candidate == "declared_method_pairwise_drop"
-            else "finite_extreme"
-        )
-        if (
-            args.scopes != ["user"]
-            or args.contrasts != ["canonical"]
-            or args.anli_contrast != "entailment_contradiction"
-            or args.transfer_aggregation != "row_pooled"
-            or args.api_infinity_policy != expected_policy
-        ):
-            raise ValueError(
-                "Revision candidates require --scopes user, the default "
-                "--contrasts canonical, --anli-contrast "
-                "entailment_contradiction, row-pooled aggregation, and the "
-                "infinity policy named by the candidate ID"
-            )
     jobs: list[tuple[str, str, str, str]] = [
         (
             bench,
@@ -1510,15 +1481,6 @@ def main() -> None:
             )
         out_df = out_df[out_df["metric"].isin(requested_metrics)].copy()
     out_df["cohort"] = cohort_name
-    out_df["artifact_role"] = (
-        "revision_candidate" if args.revision_candidate is not None else "analysis"
-    )
-    out_df["candidate_id"] = args.revision_candidate or "not_applicable"
-    out_df["selection_status"] = (
-        "author_decision_required"
-        if args.revision_candidate is not None
-        else "not_applicable"
-    )
     if not out_df.empty:
         source_open: pd.Series = out_df["model_s"].isin(OPEN_MODELS)
         target_open: pd.Series = out_df["model_t"].isin(OPEN_MODELS)
@@ -1530,9 +1492,6 @@ def main() -> None:
     else:
         out_df["pair_population"] = pd.Series(dtype=str)
     output_cols: list[str] = [
-        "artifact_role",
-        "candidate_id",
-        "selection_status",
         "cohort",
         "pair_population",
         "benchmark",
@@ -1554,7 +1513,11 @@ def main() -> None:
         "metric",
         "statistic",
         "n_observations",
+        "expected_observations",
+        "observation_coverage",
         "n_prompts",
+        "expected_prompts",
+        "prompt_coverage",
         "f_point",
         "f_lo",
         "f_hi",
@@ -1589,22 +1552,11 @@ def main() -> None:
             "api_infinity_policy": args.api_infinity_policy,
             "transfer_aggregation": args.transfer_aggregation,
             "missingness_policy": (
-                "pair_specific_finite_row_deletion"
-                if args.api_infinity_policy == "drop"
+                "pair_specific_complete_case"
+                if args.api_infinity_policy == "pairwise_complete"
                 else "model_specific_finite_extreme_replacement"
             ),
             "metrics": sorted(args.metrics) if args.metrics is not None else None,
-            "artifact_role": (
-                "revision_candidate"
-                if args.revision_candidate is not None
-                else "analysis"
-            ),
-            "candidate_id": args.revision_candidate,
-            "selection_status": (
-                "author_decision_required"
-                if args.revision_candidate is not None
-                else "not_applicable"
-            ),
         },
         root_dir=args.results_dir,
         supporting_source_paths=derived_supporting_source_paths(),

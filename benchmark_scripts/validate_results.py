@@ -25,16 +25,12 @@ import itertools
 import json
 import os
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 
-from benchmark_scripts.attention_replay_receipt import (
-    validate_receipt as validate_attention_replay_receipt,
-)
 from benchmark_scripts.benchmark_config import BENCHMARKS
 from benchmark_scripts.derived_provenance import (
     DERIVED_SUPPORTING_SOURCE_FILES,
@@ -82,8 +78,6 @@ from benchmark_scripts.hosted_completion_audit_receipt import (
 )
 from benchmark_scripts.provenance_sources import (
     GOLD_OPEN_EXECUTION_MODEL_SOURCES,
-    GOLD_OPEN_ATTENTION_REPLAY_RECEIPT_SHA256,
-    GOLD_OPEN_EXECUTION_AUDIT_RECEIPT_SHA256,
     GOLD_HOSTED_CLASSIFICATION_AUDIT_RECEIPT_SHA256,
     GOLD_HOSTED_COMPLETION_AUDIT_RECEIPT_SHA256,
     GOLD_HOSTED_IDENTITY_ATTESTATION,
@@ -97,41 +91,7 @@ from benchmark_scripts.provenance_sources import (
     OPEN_COMPLETE_SOURCE_FILES,
     OPEN_EXECUTION_SOURCE_FILES,
     OPEN_MODEL_IDENTITY_FILENAMES,
-    RECONCILIATION_ARCHIVE_CHECKS_SHA256,
-    RECONCILIATION_ARCHIVE_LEDGER_SHA256,
-    RECONCILIATION_AUDITED_CLAIM_SET_SHA256,
-    RECONCILIATION_ARCHIVE_SHA256,
-    RECONCILIATION_ARCHIVE_SIZE_BYTES,
-    RECONCILIATION_HISTORICAL_CLAIMS_SHA256,
-    RECONCILIATION_RACE_RAW_SHA256,
-    RECONCILIATION_RACE_RAW_SIZE_BYTES,
     canonical_file_hash_manifest_sha256,
-)
-from benchmark_scripts.open_execution_audit_receipt import (
-    validate_receipt as validate_open_execution_audit_receipt,
-)
-from benchmark_scripts.reconcile_results import (
-    BOOLQ_WORD_ATTENTION_NOTE,
-    BOOLQ_WORD_CONTAMINATED_ATTENTION_METRICS,
-    CLAIM_COLUMNS,
-    LEDGER_COLUMNS,
-    MANUSCRIPT_DISPOSITION_COLUMNS,
-    MODEL_IDENTITY_NOTE,
-    PAPER_CLAIM_CANONICALIZATION,
-    PAPER_IDENTITY_STATUS,
-    PAPER_REFERENCE_ID,
-    RACE_NOTE,
-    SCHEMA_VERSION as RECONCILIATION_SCHEMA_VERSION,
-    _attach_comparisons,
-    _corrected_rows,
-    _published_rows,
-    archive_checks_sha256,
-    archive_ledger_sha256,
-    audited_claim_set_sha256,
-    estimand_id,
-    historical_claims_sha256,
-    method_id,
-    manuscript_dispositions,
 )
 
 ARTIFACT_CONFIGS: list[tuple[str, str]] = [
@@ -142,41 +102,18 @@ ARTIFACT_CONFIGS: list[tuple[str, str]] = [
 RELEASE_PAPER_DERIVED_TABLES: tuple[str, ...] = (
     "f_table.tsv",
     "f_table_finite_extreme_sensitivity.tsv",
-    "f_table_prompt_equal_transfer.tsv",
-    "f_table_message_scopes.tsv",
-    "f_table_anli_contrasts.tsv",
-    "f_table_revision_candidate_pairwise_drop.tsv",
-    "f_table_revision_candidate_finite_extreme.tsv",
-    "race_rv_open.tsv",
-    "race_rv_paper_complete_case.tsv",
-    "race_multiclass_open.tsv",
-    "race_multiclass_paper_global_complete_case.tsv",
-    "race_scalar_paper_compatibility.tsv",
+    "race_rv.tsv",
 )
 RELEASE_OPEN_DERIVED_TABLES: tuple[str, ...] = (
     "f_table_open.tsv",
     "f_table_finite_extreme_sensitivity_open.tsv",
-    "f_table_prompt_equal_transfer_open.tsv",
-    "f_table_message_scopes_open.tsv",
-    "f_table_anli_contrasts_open.tsv",
     "race_rv_open.tsv",
-    "race_multiclass_open.tsv",
-    "race_scalar_paper_compatibility_open.tsv",
-)
-RELEASE_RECONCILIATION_FILES: tuple[str, ...] = (
-    "historical_claims.tsv",
-    "manuscript_disposition.tsv",
-    "reconciliation.tsv",
-    "reconciliation_checks.json",
-    "reconciliation_manifest.json",
 )
 RELEASE_LAMBADA_CANARY_MODELS: tuple[str, ...] = (
     "gemini-2-5-flash-lite-vertex",
     "gpt-4-1",
     "gpt-4o",
 )
-OPEN_EXECUTION_AUDIT_RECEIPT_NAME: str = "open_execution_audit_receipt.json"
-OPEN_ATTENTION_REPLAY_RECEIPT_NAME: str = "open_attention_replay_receipt.json"
 OPEN_RUN_FIELDS: frozenset[str] = frozenset(
     {
         "artifact_sha256",
@@ -393,9 +330,7 @@ ANALYSIS_SOURCE_FILES: tuple[str, ...] = (
     "benchmark_scripts/import_hosted_results.py",
     "benchmark_scripts/normalize_segment_outputs.py",
     "benchmark_scripts/provenance_sources.py",
-    "benchmark_scripts/race_multiclass.py",
     "benchmark_scripts/race_rv.py",
-    "benchmark_scripts/reconcile_results.py",
     "benchmark_scripts/record_hosted_provenance.py",
     "benchmark_scripts/seal_open_provenance.py",
     "benchmark_scripts/validate_results.py",
@@ -1081,7 +1016,7 @@ def _validate_gold_terminal_failure_counts(
 
 
 def _validate_open_segment_metrics(frame: pd.DataFrame, model: str) -> None:
-    """Require every published open-model representation value to be finite."""
+    """Require every released open-model representation value to be finite."""
     missing_metrics: set[str] = set(OPEN_SEGMENT_COLUMNS) - set(frame.columns)
     if missing_metrics:
         raise ValueError(
@@ -2088,33 +2023,6 @@ def _validate_open_model_identity_consistency(results_dir: str) -> None:
                 )
 
 
-def _validate_open_audit_receipts(results_dir: str) -> None:
-    """Verify the two portable receipts unique to the corrected gold run."""
-    specifications: tuple[
-        tuple[str, str, Callable[[dict[str, Any], str], None]], ...
-    ] = (
-        (
-            OPEN_EXECUTION_AUDIT_RECEIPT_NAME,
-            GOLD_OPEN_EXECUTION_AUDIT_RECEIPT_SHA256,
-            validate_open_execution_audit_receipt,
-        ),
-        (
-            OPEN_ATTENTION_REPLAY_RECEIPT_NAME,
-            GOLD_OPEN_ATTENTION_REPLAY_RECEIPT_SHA256,
-            validate_attention_replay_receipt,
-        ),
-    )
-    for filename, expected_sha256, validate in specifications:
-        path: str = os.path.join(results_dir, filename)
-        if not os.path.isfile(path) or _sha256(path) != expected_sha256:
-            raise ValueError(f"Open audit receipt seal disagrees: {path}")
-        with open(path, encoding="utf-8") as source:
-            receipt: Any = json.load(source)
-        if not isinstance(receipt, dict):
-            raise ValueError(f"Open audit receipt is not an object: {path}")
-        validate(receipt, results_dir)
-
-
 def _allowed_release_files(cohort: str) -> set[str]:
     """Return the complete portable result-artifact path allowlist."""
     if cohort not in {"open", "paper"}:
@@ -2129,8 +2037,6 @@ def _allowed_release_files(cohort: str) -> set[str]:
             {
                 HOSTED_AUDIT_RECEIPT_NAME,
                 HOSTED_COMPLETION_AUDIT_RECEIPT_NAME,
-                OPEN_ATTENTION_REPLAY_RECEIPT_NAME,
-                OPEN_EXECUTION_AUDIT_RECEIPT_NAME,
             }
         )
         release_models: tuple[str, ...] = tuple(dict.fromkeys(OPEN_MODELS + API_MODELS))
@@ -2152,9 +2058,6 @@ def _allowed_release_files(cohort: str) -> set[str]:
     for table in derived_tables:
         allowed.add(table)
         allowed.add(f"{table}.provenance.json")
-    if cohort == "paper":
-        for filename in RELEASE_RECONCILIATION_FILES:
-            allowed.add(f"reconciliation/{filename}")
     return allowed
 
 
@@ -2176,7 +2079,6 @@ def _validate_release_inventory(
     *,
     require_complete: bool = True,
     require_manifest: bool = False,
-    require_reconciliation: bool = False,
 ) -> None:
     """Require an exact, link-free public release inventory."""
     if os.path.islink(results_dir):
@@ -2217,14 +2119,11 @@ def _validate_release_inventory(
     required: set[str] = set(allowed)
     if not require_manifest:
         required.remove("artifact_manifest.json")
-    if cohort == "open" or not require_reconciliation:
+    if cohort == "open" or not require_manifest:
         # Standalone rerun directories do not need a copy of the repository's
         # release documentation.
         required.remove("README.md")
-    if cohort == "paper" and not require_reconciliation:
-        required.difference_update(
-            f"reconciliation/{filename}" for filename in RELEASE_RECONCILIATION_FILES
-        )
+    if cohort == "paper" and not require_manifest:
         required.difference_update(
             f"lambada/word/{model}_canary.json"
             for model in RELEASE_LAMBADA_CANARY_MODELS
@@ -2319,631 +2218,6 @@ def _validate_artifact_manifest(results_dir: str) -> None:
         raise ValueError(
             f"Artifact file inventory or hashes disagree in {manifest_path}"
         )
-
-
-def _validate_reconciliation_outputs(results_dir: str) -> None:
-    """Verify the paper/archive/corrected reconciliation artifact and its seals."""
-    directory: str = os.path.join(results_dir, "reconciliation")
-    table_path: str = os.path.join(directory, "reconciliation.tsv")
-    claims_path: str = os.path.join(directory, "historical_claims.tsv")
-    disposition_path: str = os.path.join(directory, "manuscript_disposition.tsv")
-    checks_path: str = os.path.join(directory, "reconciliation_checks.json")
-    manifest_path: str = os.path.join(directory, "reconciliation_manifest.json")
-    for path in (
-        table_path,
-        claims_path,
-        disposition_path,
-        checks_path,
-        manifest_path,
-    ):
-        if not os.path.isfile(path):
-            raise FileNotFoundError(f"Missing reconciliation artifact: {path}")
-
-    table: pd.DataFrame = pd.read_csv(
-        table_path,
-        sep="\t",
-        dtype=str,
-        keep_default_na=False,
-    )
-    if tuple(table.columns) != LEDGER_COLUMNS or table.empty:
-        raise ValueError(f"Invalid reconciliation ledger schema in {table_path}")
-    if archive_ledger_sha256(table_path) != RECONCILIATION_ARCHIVE_LEDGER_SHA256:
-        raise ValueError(
-            f"Reconciliation archive ledger digest disagrees in {table_path}"
-        )
-    claims: pd.DataFrame = pd.read_csv(
-        claims_path,
-        sep="\t",
-        dtype=str,
-        keep_default_na=False,
-    )
-    if tuple(claims.columns) != CLAIM_COLUMNS or claims.empty:
-        raise ValueError(f"Invalid historical-claims schema in {claims_path}")
-    if historical_claims_sha256(claims_path) != RECONCILIATION_HISTORICAL_CLAIMS_SHA256:
-        raise ValueError(f"Historical-claims digest disagrees in {claims_path}")
-    claim_ids: list[str] = claims["claim_id"].astype(str).tolist()
-    if not all(claim_ids) or len(claim_ids) != len(set(claim_ids)):
-        raise ValueError(f"Duplicate or blank historical claim IDs in {claims_path}")
-    dispositions: pd.DataFrame = pd.read_csv(
-        disposition_path,
-        sep="\t",
-        dtype=str,
-        keep_default_na=False,
-    )
-    expected_dispositions: pd.DataFrame = pd.DataFrame(
-        manuscript_dispositions(), columns=list(MANUSCRIPT_DISPOSITION_COLUMNS)
-    ).sort_values("issue_id", kind="stable")
-    if tuple(
-        dispositions.columns
-    ) != MANUSCRIPT_DISPOSITION_COLUMNS or not dispositions.equals(
-        expected_dispositions.reset_index(drop=True)
-    ):
-        raise ValueError(f"Invalid manuscript dispositions in {disposition_path}")
-    for claim in claims.to_dict(orient="records"):
-        expected_value: float = float(claim["expected_value"])
-        actual_value: float = float(claim["actual_value"])
-        tolerance: float = float(claim["tolerance"])
-        relation: str = str(claim["expected_relation"])
-        difference: float = abs(actual_value - expected_value)
-        if (
-            not np.isfinite(expected_value)
-            or not np.isfinite(actual_value)
-            or tolerance < 0.0
-            or relation not in {"within_tolerance", "outside_tolerance"}
-            or (
-                difference > tolerance
-                if relation == "within_tolerance"
-                else difference <= tolerance
-            )
-            or claim["passed"] != "True"
-        ):
-            raise ValueError(f"Historical claim failed in {claims_path}")
-        try:
-            locators: Any = json.loads(str(claim["input_locators"]))
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                f"Invalid historical claim locators in {claims_path}"
-            ) from error
-        if not isinstance(locators, list) or not locators:
-            raise ValueError(f"Historical claim has no inputs in {claims_path}")
-        for locator in locators:
-            normalized_locator: str = os.path.normpath(str(locator))
-            if (
-                not isinstance(locator, str)
-                or not locator
-                or os.path.isabs(locator)
-                or normalized_locator == os.pardir
-                or normalized_locator.startswith(os.pardir + os.sep)
-                or "\\" in locator
-                or ":" in locator
-            ):
-                raise ValueError(
-                    f"Non-portable historical claim locator in {claims_path}"
-                )
-    records: list[dict[str, Any]] = table.to_dict(orient="records")
-    required_states: set[str] = {"published", "archive", "corrected"}
-    if set(table["source_state"].astype(str)) != required_states:
-        raise ValueError(f"Incorrect source states in {table_path}")
-    for locator in table["source_locator"].astype(str).unique():
-        normalized: str = os.path.normpath(locator)
-        if (
-            not locator
-            or os.path.isabs(locator)
-            or normalized == os.pardir
-            or normalized.startswith(os.pardir + os.sep)
-            or "\\" in locator
-            or ":" in locator
-        ):
-            raise ValueError(f"Non-portable source locator in {table_path}")
-
-    expected_published_rows: list[dict[str, Any]] = _published_rows()
-    expected_ids: set[str] = {
-        str(row["reconciliation_id"]) for row in expected_published_rows
-    }
-    published: list[dict[str, Any]] = [
-        row for row in records if row["source_state"] == "published"
-    ]
-    archived: list[dict[str, Any]] = [
-        row for row in records if row["source_state"] == "archive"
-    ]
-    corrected: list[dict[str, Any]] = [
-        row for row in records if row["source_state"] == "corrected"
-    ]
-    if (
-        len(published) != len(expected_ids)
-        or {str(row["reconciliation_id"]) for row in published} != expected_ids
-        or len(archived) != len(expected_ids)
-        or {str(row["reconciliation_id"]) for row in archived} != expected_ids
-    ):
-        raise ValueError(f"Incomplete published/archive cell inventory in {table_path}")
-    recomputed_corrected, corrected_checks, _ = _corrected_rows(results_dir)
-    if any(not bool(check["passed"]) for check in corrected_checks):
-        raise ValueError("Corrected reconciliation inputs failed provenance checks")
-    expected_corrected_keys: set[tuple[str, str]] = {
-        (str(row["reconciliation_id"]), str(row["estimand_id"]))
-        for row in recomputed_corrected
-    }
-    actual_corrected_keys: set[tuple[str, str]] = {
-        (str(row["reconciliation_id"]), str(row["estimand_id"])) for row in corrected
-    }
-    if (
-        len(corrected) != len(recomputed_corrected)
-        or actual_corrected_keys != expected_corrected_keys
-    ):
-        raise ValueError(f"Incomplete corrected cell inventory in {table_path}")
-
-    row_keys: list[tuple[str, str, str]] = [
-        (
-            str(row["source_state"]),
-            str(row["reconciliation_id"]),
-            str(row["estimand_id"]),
-        )
-        for row in records
-    ]
-    if len(row_keys) != len(set(row_keys)):
-        raise ValueError(f"Duplicate reconciliation ledger rows in {table_path}")
-    for row in records:
-        expected_reconciliation_id: str = (
-            f"{row['paper_location']}:{row['benchmark']}:{row['pregrouper']}:"
-            f"{row['metric']}:{row['pair_set']}:{row['value_component']}"
-        )
-        if row["reconciliation_id"] != expected_reconciliation_id:
-            raise ValueError(f"Invalid reconciliation cell ID in {table_path}")
-        if row["method_id"] != method_id(row) or row["estimand_id"] != estimand_id(row):
-            raise ValueError(f"Invalid reconciliation estimand ID in {table_path}")
-
-    expected_publication: dict[str, dict[str, Any]] = {
-        str(row["reconciliation_id"]): row for row in expected_published_rows
-    }
-    for row in published:
-        expected: dict[str, Any] = expected_publication[str(row["reconciliation_id"])]
-        for column in LEDGER_COLUMNS:
-            actual_value: Any = row[column]
-            expected_value: Any = expected[column]
-            if column in {"value", "delta_from_published"}:
-                actual_number: float | None = (
-                    None if actual_value in ("", None) else float(actual_value)
-                )
-                expected_number: float | None = (
-                    None if expected_value in ("", None) else float(expected_value)
-                )
-                if (actual_number is None) != (expected_number is None) or (
-                    actual_number is not None
-                    and expected_number is not None
-                    and actual_number != expected_number
-                ):
-                    raise ValueError(f"Published cell value disagrees in {table_path}")
-            elif str(actual_value) != str(expected_value):
-                raise ValueError(f"Published cell metadata disagrees in {table_path}")
-
-    published_by_id: dict[str, dict[str, Any]] = {
-        str(row["reconciliation_id"]): row for row in published
-    }
-    for row in archived:
-        reference: dict[str, Any] = published_by_id[str(row["reconciliation_id"])]
-        expected_data_status: str = (
-            "reproduced_invalid_sentence_attention_contamination"
-            if row["benchmark"] == "boolq"
-            and row["pregrouper"] == "word"
-            and row["metric"] in BOOLQ_WORD_CONTAMINATED_ATTENTION_METRICS
-            else (
-                "reproduced_metric_mislabeled"
-                if row["benchmark"] == "race" and row["metric"] in {"F_pred", "F_attr"}
-                else "complete"
-            )
-        )
-        if (
-            row["method_id"] != reference["method_id"]
-            or row["estimand_id"] != reference["estimand_id"]
-            or row["data_status"] != expected_data_status
-        ):
-            raise ValueError(
-                f"Archive estimand does not match the paper in {table_path}"
-            )
-
-    expected_corrected_rows: list[dict[str, Any]] = [
-        dict(row) for row in expected_published_rows + recomputed_corrected
-    ]
-    _attach_comparisons(expected_corrected_rows)
-    recomputed_by_key: dict[tuple[str, str], dict[str, Any]] = {
-        (str(row["reconciliation_id"]), str(row["estimand_id"])): row
-        for row in expected_corrected_rows
-        if row["source_state"] == "corrected"
-    }
-    for row in corrected:
-        key: tuple[str, str] = (
-            str(row["reconciliation_id"]),
-            str(row["estimand_id"]),
-        )
-        expected = recomputed_by_key[key]
-        for column in LEDGER_COLUMNS:
-            actual_value: Any = row[column]
-            expected_value: Any = expected[column]
-            if column in {"value", "delta_from_published"}:
-                actual_number: float | None = (
-                    None if actual_value in ("", None) else float(actual_value)
-                )
-                expected_number: float | None = (
-                    None if expected_value in ("", None) else float(expected_value)
-                )
-                if (actual_number is None) != (expected_number is None) or (
-                    actual_number is not None
-                    and expected_number is not None
-                    and not np.isclose(
-                        actual_number, expected_number, rtol=0.0, atol=1e-15
-                    )
-                ):
-                    raise ValueError(
-                        f"Corrected reconciliation value disagrees in {table_path}"
-                    )
-            elif str(actual_value) != str(expected_value):
-                raise ValueError(
-                    f"Corrected reconciliation metadata disagrees in {table_path}"
-                )
-
-    expected_comparisons: list[dict[str, Any]] = [dict(row) for row in records]
-    for row in expected_comparisons:
-        if row["source_state"] != "published":
-            row["comparison_status"] = "pending"
-            row["delta_from_published"] = None
-    _attach_comparisons(expected_comparisons)
-    for actual, expected in zip(records, expected_comparisons):
-        if actual["comparison_status"] != expected["comparison_status"]:
-            raise ValueError(f"Incorrect comparison status in {table_path}")
-        actual_delta: float | None = (
-            None
-            if actual["delta_from_published"] == ""
-            else float(actual["delta_from_published"])
-        )
-        expected_delta_value: Any = expected["delta_from_published"]
-        expected_delta: float | None = (
-            None if expected_delta_value in ("", None) else float(expected_delta_value)
-        )
-        if (actual_delta is None) != (expected_delta is None) or (
-            actual_delta is not None
-            and expected_delta is not None
-            and not np.isclose(actual_delta, expected_delta, rtol=0.0, atol=1e-15)
-        ):
-            raise ValueError(f"Incorrect published delta in {table_path}")
-
-    with open(checks_path, encoding="utf-8") as source:
-        checks: Any = json.load(source)
-    check_rows: Any = checks.get("checks") if isinstance(checks, dict) else None
-    if (
-        not isinstance(checks, dict)
-        or set(checks) != {"schema_version", "artifact_type", "all_passed", "checks"}
-        or checks.get("schema_version") != RECONCILIATION_SCHEMA_VERSION
-        or checks.get("artifact_type") != "reconciliation_checks"
-        or checks.get("all_passed") is not True
-        or not isinstance(check_rows, list)
-        or not check_rows
-        or any(
-            not isinstance(check, dict) or check.get("passed") is not True
-            for check in check_rows
-        )
-    ):
-        raise ValueError(f"Reconciliation checks did not all pass in {checks_path}")
-    check_ids: list[str] = [str(check.get("check_id", "")) for check in check_rows]
-    if not all(check_ids) or len(check_ids) != len(set(check_ids)):
-        raise ValueError(
-            f"Duplicate or blank reconciliation check IDs in {checks_path}"
-        )
-    if archive_checks_sha256(check_rows) != RECONCILIATION_ARCHIVE_CHECKS_SHA256:
-        raise ValueError(
-            f"Reconciliation archive checks digest disagrees in {checks_path}"
-        )
-    required_check_ids: set[str] = {
-        f"published_rounding:{row['reconciliation_id']}" for row in archived
-    }
-    for row in archived:
-        if row["paper_location"] == "Table 1":
-            required_check_ids.add(
-                f"archive_pair_grid:Table1:{row['benchmark']}:{row['pregrouper']}:"
-                f"{row['metric']}:{row['pair_set']}:{row['value_component']}"
-            )
-        else:
-            required_check_ids.add(
-                f"archive_pair_grid:Table2:{row['benchmark']}:{row['pregrouper']}:"
-                f"{row['metric']}:all"
-            )
-    required_check_ids.update(
-        {
-            "archive_byte_sha256:reconciliation_models",
-            "historical_numeric:boolq:sentence:F_pred",
-            "historical_numeric:boolq:sentence:F_attr",
-            "historical_numeric:race:sentence:F_pred",
-            "historical_numeric:race:sentence:F_attr",
-            "historical_numeric:boolq:qwen7b_qwen14b:F_attr",
-            "archive_ledger_sha256",
-            "audited_claim_set_sha256",
-            "historical_claims_sha256",
-            "nonmatching_estimands_have_no_delta",
-            *{
-                f"archive_byte_sha256:{benchmark}:{pregrouper}"
-                for benchmark, pregrouper in (
-                    *DEFAULT_BENCHMARK_CONFIGS,
-                    ("race", "sentence"),
-                )
-            },
-            *{
-                f"archive_rows:{benchmark}:{pregrouper}"
-                for benchmark, pregrouper in (
-                    *DEFAULT_BENCHMARK_CONFIGS,
-                    ("race", "sentence"),
-                )
-            },
-        }
-    )
-    required_check_ids.update(f"historical_claim:{claim_id}" for claim_id in claim_ids)
-    required_check_ids.update(
-        {
-            f"archive_byte_sha256:{locator.removeprefix('archive/')}"
-            for locator in RECONCILIATION_RACE_RAW_SHA256
-        }
-    )
-    required_check_ids.update(
-        {
-            f"archive_size_bytes:{locator.removeprefix('archive/')}"
-            for locator in RECONCILIATION_RACE_RAW_SIZE_BYTES
-        }
-    )
-    required_check_ids.update(str(check["check_id"]) for check in corrected_checks)
-    if set(check_ids) != required_check_ids:
-        raise ValueError(f"Incomplete reconciliation check inventory in {checks_path}")
-    allowed_check_keys: set[str] = {
-        "check_id",
-        "kind",
-        "locator",
-        "expected",
-        "actual",
-        "tolerance",
-        "passed",
-    }
-    for check in check_rows:
-        if not set(check).issubset(allowed_check_keys | {"bypassed"}):
-            raise ValueError(f"Unexpected reconciliation check fields in {checks_path}")
-        locator_value: str = str(check.get("locator", ""))
-        if (
-            not locator_value
-            or os.path.isabs(locator_value)
-            or "\\" in locator_value
-            or ":" in locator_value
-        ):
-            raise ValueError(
-                f"Non-portable reconciliation check locator in {checks_path}"
-            )
-    actual_checks_by_id: dict[str, dict[str, Any]] = {
-        str(check["check_id"]): check for check in check_rows
-    }
-    for claim in claims.to_dict(orient="records"):
-        claim_check: dict[str, Any] = actual_checks_by_id[
-            f"historical_claim:{claim['claim_id']}"
-        ]
-        if (
-            float(claim_check["expected"]) != float(claim["expected_value"])
-            or float(claim_check["actual"]) != float(claim["actual_value"])
-            or float(claim_check["tolerance"]) != float(claim["tolerance"])
-            or claim_check["passed"] is not True
-        ):
-            raise ValueError(
-                f"Historical claim check disagrees for {claim['claim_id']}"
-            )
-    for expected_check in corrected_checks:
-        check_id: str = str(expected_check["check_id"])
-        if actual_checks_by_id[check_id] != expected_check:
-            raise ValueError(
-                f"Corrected provenance check disagrees for {check_id} in {checks_path}"
-            )
-
-    with open(manifest_path, encoding="utf-8") as source:
-        manifest: Any = json.load(source)
-    if (
-        not isinstance(manifest, dict)
-        or manifest.get("schema_version") != RECONCILIATION_SCHEMA_VERSION
-        or manifest.get("artifact_type") != "result_reconciliation"
-        or set(manifest)
-        != {
-            "schema_version",
-            "artifact_type",
-            "generator",
-            "inputs",
-            "outputs",
-            "historical_estimand",
-            "paper_reference",
-            "archive_provenance",
-            "race_caveat",
-            "boolq_word_attention_caveat",
-            "model_identity_caveat",
-            "software",
-        }
-    ):
-        raise ValueError(f"Invalid reconciliation manifest in {manifest_path}")
-    if (
-        manifest.get("historical_estimand")
-        != {
-            "statistic": "pearson_r2",
-            "missingness_policy": "pairwise_drop_nonfinite",
-            "prediction_scope": "not_applicable",
-            "segment_level_declared_scope": "user",
-            "segment_level_executed_scope": "all",
-            "anli_declared_contrast": "entailment_contradiction",
-            "anli_executed_contrast": "entailment_neutral",
-        }
-        or manifest.get("race_caveat") != RACE_NOTE
-        or manifest.get("boolq_word_attention_caveat") != BOOLQ_WORD_ATTENTION_NOTE
-        or manifest.get("model_identity_caveat") != MODEL_IDENTITY_NOTE
-    ):
-        raise ValueError(f"Reconciliation method metadata disagrees in {manifest_path}")
-    paper_reference: Any = manifest.get("paper_reference")
-    expected_claim_digest: str = audited_claim_set_sha256(
-        expected_published_rows,
-        claims.to_dict(orient="records"),
-    )
-    if (
-        paper_reference
-        != {
-            "reference_id": PAPER_REFERENCE_ID,
-            "work_id": "arXiv:2606.32008",
-            "version": None,
-            "pdf_sha256": None,
-            "identity_status": PAPER_IDENTITY_STATUS,
-            "claim_canonicalization": PAPER_CLAIM_CANONICALIZATION,
-            "audited_claim_set_sha256": expected_claim_digest,
-            "claim_scope": (
-                "Tables 1-2 plus explicitly enumerated Figure 13 and "
-                "main-text numerical claims"
-            ),
-        }
-        or expected_claim_digest != RECONCILIATION_AUDITED_CLAIM_SET_SHA256
-    ):
-        raise ValueError(f"Paper claim-set identity disagrees in {manifest_path}")
-    software: Any = manifest.get("software")
-    if (
-        not isinstance(software, dict)
-        or set(software)
-        != {
-            "python",
-            "python_implementation",
-            "numpy",
-            "pandas",
-        }
-        or any(
-            not isinstance(value, str)
-            or not value
-            or len(value) > 100
-            or any(
-                character
-                not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.+-_"
-                for character in value
-            )
-            for value in software.values()
-        )
-    ):
-        raise ValueError(f"Invalid reconciliation software metadata in {manifest_path}")
-    repository_root: str = os.path.dirname(os.path.dirname(__file__))
-    generator_path: str = os.path.join(
-        repository_root, "benchmark_scripts/reconcile_results.py"
-    )
-    if manifest.get("generator") != {
-        "locator": "benchmark_scripts/reconcile_results.py",
-        "sha256": _sha256(generator_path),
-    }:
-        raise ValueError(f"Reconciliation generator seal disagrees in {manifest_path}")
-    expected_outputs: dict[str, dict[str, str | int]] = {
-        "reconciliation.tsv": {
-            "sha256": _sha256(table_path),
-            "size_bytes": os.path.getsize(table_path),
-        },
-        "historical_claims.tsv": {
-            "sha256": _sha256(claims_path),
-            "size_bytes": os.path.getsize(claims_path),
-        },
-        "manuscript_disposition.tsv": {
-            "sha256": _sha256(disposition_path),
-            "size_bytes": os.path.getsize(disposition_path),
-        },
-        "reconciliation_checks.json": {
-            "sha256": _sha256(checks_path),
-            "size_bytes": os.path.getsize(checks_path),
-        },
-    }
-    if manifest.get("outputs") != expected_outputs:
-        raise ValueError(f"Reconciliation output seals disagree in {manifest_path}")
-
-    inputs: Any = manifest.get("inputs")
-    required_inputs: set[str] = {
-        "archive/reconciliation_models.json",
-        *{
-            f"archive/{benchmark}_{pregrouper}_consolidated.tsv"
-            for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS
-        },
-        "archive/race_sentence_consolidated.tsv",
-        "corrected/f_table.tsv",
-        "corrected/f_table.tsv.provenance.json",
-        "corrected/f_table_prompt_equal_transfer.tsv",
-        "corrected/f_table_prompt_equal_transfer.tsv.provenance.json",
-        "corrected/f_table_revision_candidate_pairwise_drop.tsv",
-        "corrected/f_table_revision_candidate_pairwise_drop.tsv.provenance.json",
-        "corrected/f_table_revision_candidate_finite_extreme.tsv",
-        "corrected/f_table_revision_candidate_finite_extreme.tsv.provenance.json",
-        "corrected/race_scalar_paper_compatibility.tsv",
-        "corrected/race_scalar_paper_compatibility.tsv.provenance.json",
-        "corrected/race/sentence/segments.tsv.gz",
-        *{f"corrected/race/sentence/{model}_segment.tsv.gz" for model in OPEN_MODELS},
-        *RECONCILIATION_RACE_RAW_SHA256,
-    }
-    if not isinstance(inputs, dict) or set(inputs) != required_inputs:
-        raise ValueError(f"Incomplete reconciliation inputs in {manifest_path}")
-    archive_provenance: Any = manifest.get("archive_provenance")
-    if archive_provenance != {
-        "kind": "raw_archive_snapshot_bytes",
-        "enforced": True,
-        "trusted_sha256": dict(sorted(RECONCILIATION_ARCHIVE_SHA256.items())),
-        "trusted_size_bytes": dict(sorted(RECONCILIATION_ARCHIVE_SIZE_BYTES.items())),
-        "trusted_race_raw_sha256": dict(sorted(RECONCILIATION_RACE_RAW_SHA256.items())),
-        "trusted_race_raw_size_bytes": dict(
-            sorted(RECONCILIATION_RACE_RAW_SIZE_BYTES.items())
-        ),
-        "sanitized_ledger_sha256": RECONCILIATION_ARCHIVE_LEDGER_SHA256,
-        "sanitized_checks_sha256": RECONCILIATION_ARCHIVE_CHECKS_SHA256,
-        "historical_claims_sha256": RECONCILIATION_HISTORICAL_CLAIMS_SHA256,
-        "audited_claim_set_sha256": RECONCILIATION_AUDITED_CLAIM_SET_SHA256,
-    }:
-        raise ValueError(f"Untrusted reconciliation archive policy in {manifest_path}")
-    for locator, expected_digest in RECONCILIATION_ARCHIVE_SHA256.items():
-        record: Any = inputs.get(locator)
-        if (
-            not isinstance(record, dict)
-            or record.get("sha256") != expected_digest
-            or record.get("size_bytes") != RECONCILIATION_ARCHIVE_SIZE_BYTES[locator]
-        ):
-            raise ValueError(
-                f"Reconciliation archive digest disagrees for {locator} in "
-                f"{manifest_path}"
-            )
-    for locator, expected_digest in RECONCILIATION_RACE_RAW_SHA256.items():
-        record = inputs.get(locator)
-        if (
-            not isinstance(record, dict)
-            or record.get("sha256") != expected_digest
-            or record.get("size_bytes") != RECONCILIATION_RACE_RAW_SIZE_BYTES[locator]
-        ):
-            raise ValueError(
-                f"Reconciliation RACE raw digest disagrees for {locator} in "
-                f"{manifest_path}"
-            )
-    for locator, record in inputs.items():
-        normalized = os.path.normpath(str(locator))
-        digest: Any = record.get("sha256") if isinstance(record, dict) else None
-        size: Any = record.get("size_bytes") if isinstance(record, dict) else None
-        if (
-            not isinstance(record, dict)
-            or set(record) != {"sha256", "size_bytes"}
-            or not str(locator)
-            or os.path.isabs(str(locator))
-            or normalized == os.pardir
-            or normalized.startswith(os.pardir + os.sep)
-            or "\\" in str(locator)
-            or ":" in str(locator)
-            or not isinstance(digest, str)
-            or len(digest) != 64
-            or any(character not in "0123456789abcdef" for character in digest)
-            or not isinstance(size, int)
-            or size < 0
-        ):
-            raise ValueError(f"Invalid reconciliation input seal in {manifest_path}")
-        if str(locator).startswith("corrected/"):
-            corrected_path: str = os.path.join(
-                results_dir, str(locator).removeprefix("corrected/")
-            )
-            if (
-                not os.path.isfile(corrected_path)
-                or _sha256(corrected_path) != digest
-                or os.path.getsize(corrected_path) != size
-            ):
-                raise ValueError(
-                    f"Corrected reconciliation input disagrees in {manifest_path}"
-                )
 
 
 def _read_derived(path: str) -> pd.DataFrame:
@@ -3092,7 +2366,6 @@ def _validate_f_table_parameters(
     scalar_only: bool,
     path: str,
     anli_contrast: str | None = None,
-    candidate_id: str | None = None,
 ) -> None:
     """Require the exact public F-table analysis parameters."""
     expected_benchmarks: set[tuple[str, str]] = {
@@ -3120,17 +2393,12 @@ def _validate_f_table_parameters(
         "api_infinity_policy": api_infinity_policy,
         "transfer_aggregation": transfer_aggregation,
         "missingness_policy": (
-            "pair_specific_finite_row_deletion"
-            if api_infinity_policy == "drop"
+            "pair_specific_complete_case"
+            if api_infinity_policy == "pairwise_complete"
             else "model_specific_finite_extreme_replacement"
         ),
         "metrics": expected_metrics,
         "anli_contrast": anli_contrast,
-        "artifact_role": "revision_candidate" if candidate_id else "analysis",
-        "candidate_id": candidate_id,
-        "selection_status": (
-            "author_decision_required" if candidate_id else "not_applicable"
-        ),
     }
     expected_parameter_fields: set[str] = {
         "benchmark_configs",
@@ -3160,11 +2428,8 @@ def _require_pair_grid(
     scalar_only: bool = False,
 ) -> None:
     resolved_columns: set[str] = {
-        "artifact_role",
-        "candidate_id",
         "cohort",
         "pair_population",
-        "selection_status",
         "availability_status",
         "unavailable_reason",
         "requested_scope",
@@ -3181,22 +2446,8 @@ def _require_pair_grid(
             f"{sorted(missing_resolved_columns)}"
         )
     expected_cohort: str = "open" if models == OPEN_MODELS else "paper"
-    expected_artifact_role: str = (
-        "revision_candidate"
-        if frame["candidate_id"].astype(str).ne("not_applicable").any()
-        else "analysis"
-    )
-    expected_selection_status: str = (
-        "author_decision_required"
-        if expected_artifact_role == "revision_candidate"
-        else "not_applicable"
-    )
-    if (
-        set(frame["cohort"].astype(str)) != {expected_cohort}
-        or set(frame["artifact_role"].astype(str)) != {expected_artifact_role}
-        or set(frame["selection_status"].astype(str)) != {expected_selection_status}
-    ):
-        raise ValueError(f"{path} has incorrect artifact-role or cohort metadata")
+    if set(frame["cohort"].astype(str)) != {expected_cohort}:
+        raise ValueError(f"{path} has incorrect cohort metadata")
     for row in frame.itertuples(index=False):
         requested_scope: str = str(row.scope)
         requested_contrast: str = str(row.contrast)
@@ -3259,7 +2510,7 @@ def _require_pair_grid(
                 "F_mag",
             )
             symmetric_metrics += ("F_align",)
-        for statistic in ("spearman", "pearson_r2"):
+        for statistic in ("spearman", "pearson_r", "pearson_r2"):
             for metric in symmetric_metrics:
                 pairs: set[tuple[str, str]] = (
                     symmetric_pairs if metric in {"F_pred", "F_attr"} else open_pairs
@@ -3318,9 +2569,34 @@ def _require_pair_grid(
             f"{len(expected_keys - actual_keys)} missing and "
             f"{len(actual_keys - expected_keys)} extra keys"
         )
+    coverage_columns: set[str] = {
+        "expected_observations",
+        "observation_coverage",
+        "expected_prompts",
+        "prompt_coverage",
+    }
+    if not coverage_columns.issubset(frame.columns):
+        raise ValueError(f"{path} omits pair-specific coverage metadata")
     observations: pd.Series = pd.to_numeric(frame["n_observations"], errors="coerce")
+    expected_observations: pd.Series = pd.to_numeric(
+        frame["expected_observations"], errors="coerce"
+    )
+    observation_coverage: pd.Series = pd.to_numeric(
+        frame["observation_coverage"], errors="coerce"
+    )
     prompts: pd.Series = pd.to_numeric(frame["n_prompts"], errors="coerce")
-    if observations.isna().any() or prompts.isna().any():
+    expected_prompts: pd.Series = pd.to_numeric(
+        frame["expected_prompts"], errors="coerce"
+    )
+    prompt_coverage: pd.Series = pd.to_numeric(
+        frame["prompt_coverage"], errors="coerce"
+    )
+    if (
+        observations.isna().any()
+        or expected_observations.isna().any()
+        or prompts.isna().any()
+        or expected_prompts.isna().any()
+    ):
         raise ValueError(f"{path} has invalid result counts")
 
     def _unsupported_row(row: pd.Series) -> bool:
@@ -3378,6 +2654,19 @@ def _require_pair_grid(
         raise ValueError(f"{path} does not label readout-contrast mismatches")
     estimable: pd.Series = ~unavailable_rows
     if not (
+        observation_coverage[estimable].between(0.0, 1.0).all()
+        and prompt_coverage[estimable].between(0.0, 1.0).all()
+        and np.allclose(
+            observation_coverage[estimable],
+            observations[estimable] / expected_observations[estimable],
+        )
+        and np.allclose(
+            prompt_coverage[estimable],
+            prompts[estimable] / expected_prompts[estimable],
+        )
+    ):
+        raise ValueError(f"{path} has inconsistent pair-specific coverage")
+    if not (
         np.isfinite(points[estimable]).all()
         and np.isfinite(lows[estimable]).all()
         and np.isfinite(highs[estimable]).all()
@@ -3432,7 +2721,7 @@ def _validate_derived_outputs(
     cohort_name: str,
     models: tuple[str, ...],
 ) -> None:
-    """Validate complete derived-table grids and explicit RACE missingness."""
+    """Validate the canonical scalar and multivariate result tables."""
     unsupported_prediction_configs: set[tuple[str, str, str]] = set()
     unsupported_attribution_configs: set[tuple[str, str, str]] = set()
     for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS:
@@ -3445,156 +2734,32 @@ def _validate_derived_outputs(
         unsupported_attribution_configs.update(
             (benchmark, pregrouper, model) for model in unsupported_attribution
         )
+
     suffix: str = "_open" if cohort_name == "open" else ""
-    specifications: list[
-        tuple[
-            str,
-            set[tuple[str, str, str, str]],
-            str,
-            str,
-            bool,
-            str | None,
-            str | None,
-        ]
-    ] = [
+    expected_configs: set[tuple[str, str, str, str]] = {
         (
-            f"f_table{suffix}.tsv",
-            {
-                (benchmark, pregrouper, "all", "canonical")
-                for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS
-            },
-            "drop",
-            "row_pooled",
-            False,
-            None,
-            None,
-        ),
-        (
-            f"f_table_finite_extreme_sensitivity{suffix}.tsv",
-            {
-                (benchmark, pregrouper, "all", "canonical")
-                for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS
-            },
-            "finite_extreme",
-            "row_pooled",
-            False,
-            None,
-            None,
-        ),
-        (
-            f"f_table_prompt_equal_transfer{suffix}.tsv",
-            {
-                (benchmark, pregrouper, "all", "canonical")
-                for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS
-            },
-            "drop",
-            "prompt_equal_mean_r2",
-            False,
-            None,
-            None,
-        ),
-        (
-            f"f_table_message_scopes{suffix}.tsv",
-            {
-                (benchmark, pregrouper, scope, "canonical")
-                for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS
-                for scope in ("all", "system", "user")
-            },
-            "drop",
-            "row_pooled",
-            False,
-            None,
-            None,
-        ),
-        (
-            f"f_table_anli_contrasts{suffix}.tsv",
-            {
-                (benchmark, "sentence", scope, contrast)
-                for benchmark in ("anli_r1", "anli_r2", "anli_r3")
-                for scope in ("all", "system", "user")
-                for contrast in (
-                    "entailment_neutral",
-                    "entailment_contradiction",
-                )
-            },
-            "drop",
-            "row_pooled",
-            False,
-            None,
-            None,
-        ),
-        (
-            f"race_scalar_paper_compatibility{suffix}.tsv",
-            {
-                ("race", "sentence", scope, "canonical")
-                for scope in ("all", "system", "user")
-            },
-            "drop",
-            "row_pooled",
-            True,
-            None,
-            None,
-        ),
-    ]
-    if cohort_name == "paper":
-        revision_configs: set[tuple[str, str, str, str]] = {
+            benchmark,
+            pregrouper,
+            "user",
             (
-                benchmark,
-                pregrouper,
-                "user",
-                (
-                    "entailment_contradiction"
-                    if benchmark.startswith("anli_")
-                    else "canonical"
-                ),
-            )
-            for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS
-        }
-        specifications.extend(
-            [
-                (
-                    "f_table_revision_candidate_pairwise_drop.tsv",
-                    revision_configs,
-                    "drop",
-                    "row_pooled",
-                    False,
-                    "entailment_contradiction",
-                    "declared_method_pairwise_drop",
-                ),
-                (
-                    "f_table_revision_candidate_finite_extreme.tsv",
-                    revision_configs,
-                    "finite_extreme",
-                    "row_pooled",
-                    False,
-                    "entailment_contradiction",
-                    "declared_method_finite_extreme",
-                ),
-            ]
+                "entailment_contradiction"
+                if benchmark.startswith("anli_")
+                else "canonical"
+            ),
         )
-    candidate_frames: dict[str, pd.DataFrame] = {}
-    for (
-        filename,
-        expected_configs,
-        infinity_policy,
-        transfer_aggregation,
-        scalar_only,
-        anli_contrast,
-        candidate_id,
-    ) in specifications:
+        for benchmark, pregrouper in DEFAULT_BENCHMARK_CONFIGS
+    }
+    for filename, infinity_policy in (
+        (f"f_table{suffix}.tsv", "pairwise_complete"),
+        (f"f_table_finite_extreme_sensitivity{suffix}.tsv", "finite_extreme"),
+    ):
         path: str = os.path.join(results_dir, filename)
         frame: pd.DataFrame = _read_derived(path)
-        benchmark_configs: list[tuple[str, str]] = sorted(
-            {
-                (benchmark, pregrouper)
-                for benchmark, pregrouper, _, _ in expected_configs
-            }
-        )
         parameters: dict[str, Any] = _validate_derived_sidecar(
             results_dir,
             path,
             "benchmark_scripts.f_table",
-            benchmark_configs,
+            list(DEFAULT_BENCHMARK_CONFIGS),
             models,
         )
         _validate_f_table_parameters(
@@ -3602,11 +2767,10 @@ def _validate_derived_outputs(
             expected_configs,
             models,
             infinity_policy,
-            transfer_aggregation,
-            scalar_only,
+            "row_pooled",
+            False,
             path,
-            anli_contrast,
-            candidate_id,
+            "entailment_contradiction",
         )
         actual_configs: set[tuple[str, str, str, str]] = set(
             frame[["benchmark", "pregrouper", "scope", "contrast"]].itertuples(
@@ -3621,301 +2785,94 @@ def _validate_derived_outputs(
             models,
             path,
             infinity_policy,
-            transfer_aggregation,
+            "row_pooled",
             unsupported_prediction_configs,
             unsupported_attribution_configs,
-            scalar_only,
         )
 
-        expected_candidate_value: str = candidate_id or "not_applicable"
-        if set(frame["candidate_id"].astype(str)) != {expected_candidate_value}:
-            raise ValueError(f"{path} has an incorrect candidate ID")
-        if candidate_id is not None:
-            candidate_frames[candidate_id] = frame
-
-    if cohort_name == "paper":
-        if set(candidate_frames) != {
-            "declared_method_pairwise_drop",
-            "declared_method_finite_extreme",
-        }:
-            raise ValueError("Revision-candidate table inventory is incomplete")
-        invariant_columns: list[str] = [
-            column
-            for column in candidate_frames[
-                "declared_method_pairwise_drop"
-            ].columns.tolist()
-            if column not in {"api_infinity_policy", "candidate_id"}
-        ]
-        sort_columns: list[str] = [
-            "benchmark",
-            "pregrouper",
-            "requested_scope",
-            "requested_contrast",
-            "model_s",
-            "model_t",
-            "metric",
-            "statistic",
-        ]
-        invariant_views: list[pd.DataFrame] = []
-        for candidate_id in (
-            "declared_method_pairwise_drop",
-            "declared_method_finite_extreme",
-        ):
-            candidate: pd.DataFrame = candidate_frames[candidate_id]
-            view: pd.DataFrame = candidate[
-                candidate["pair_population"].eq("open_open")
-            ][invariant_columns].sort_values(sort_columns)
-            invariant_views.append(view.reset_index(drop=True))
-        if not invariant_views[0].equals(invariant_views[1]):
-            raise ValueError(
-                "Revision candidates differ outside the hosted non-finite policy"
-            )
-
-    race_files: list[tuple[str, int, bool]] = [
-        ("race_rv_open.tsv", len(OPEN_MODELS), True)
-    ]
-    if cohort_name == "paper":
-        race_files.append(("race_rv_paper_complete_case.tsv", len(PAPER_MODELS), False))
-    for filename, race_models, require_full_coverage in race_files:
-        path = os.path.join(results_dir, filename)
-        frame = _read_derived(path)
-        race_cohort: tuple[str, ...] = (
-            OPEN_MODELS if race_models == len(OPEN_MODELS) else PAPER_MODELS
-        )
-        parameters = _validate_derived_sidecar(
-            results_dir,
-            path,
-            "benchmark_scripts.race_rv",
-            [("race", "sentence")],
-            race_cohort,
-        )
-        expected_rv_parameters: dict[str, Any] = {
-            "scopes": ["all", "system", "user"],
-            "representations": ["all_pairs", "anchor_a"],
-            "bootstrap_resamples": 1000,
-            "confidence_level": 0.95,
-            "seed": 42,
-            "cohort": "open" if require_full_coverage else "paper",
-            "requested_models": list(race_cohort),
-            "output_models": sorted(race_cohort),
-            "missingness_policy": "pair_specific_complete_case",
-        }
-        if parameters != expected_rv_parameters:
-            raise ValueError(f"Incorrect RACE RV derivation parameters in {path}")
-        extra_required: set[str] = {
-            "representation",
-            "missingness_policy",
-            "expected_observations",
-            "observation_coverage",
-        }
-        if not extra_required.issubset(frame.columns):
-            raise ValueError(f"{path} omits RACE coverage metadata")
-        expected_race_keys: set[tuple[str, str, str, str, str]] = {
-            (scope, representation, model_s, model_t, metric)
-            for scope in ("all", "system", "user")
-            for representation in ("all_pairs", "anchor_a")
-            for model_s, model_t in itertools.combinations(race_cohort, 2)
-            for metric in ("F_pred_rv", "F_attr_rv")
-        }
-        actual_race_keys: set[tuple[str, str, str, str, str]] = set(
-            frame[
-                ["scope", "representation", "model_s", "model_t", "metric"]
-            ].itertuples(index=False, name=None)
-        )
-        if actual_race_keys != expected_race_keys:
-            raise ValueError(f"{path} has an incorrect RACE semantic result grid")
-        if (
-            set(frame["statistic"].astype(str)) != {"rv"}
-            or set(frame["missingness_policy"].astype(str))
-            != {"pair_specific_complete_case"}
-            or set(frame["aggregation"].astype(str)) != {"row_pooled"}
-        ):
-            raise ValueError(f"{path} has incorrect RACE method metadata")
-        coverage: pd.Series = pd.to_numeric(
-            frame["observation_coverage"], errors="coerce"
-        )
-        if coverage.isna().any() or not coverage.between(0.0, 1.0).all():
-            raise ValueError(f"{path} has invalid observation coverage")
-        observed: pd.Series = pd.to_numeric(frame["n_observations"], errors="coerce")
-        expected: pd.Series = pd.to_numeric(
-            frame["expected_observations"], errors="coerce"
-        )
-        if (
-            observed.isna().any()
-            or expected.isna().any()
-            or not np.allclose(coverage, observed / expected)
-        ):
-            raise ValueError(f"{path} has inconsistent RACE coverage counts")
-        points = pd.to_numeric(frame["f_point"], errors="coerce")
-        lows = pd.to_numeric(frame["f_lo"], errors="coerce")
-        highs = pd.to_numeric(frame["f_hi"], errors="coerce")
-        estimable = observed.ge(3)
-        if not (
-            np.isfinite(points[estimable]).all()
-            and np.isfinite(lows[estimable]).all()
-            and np.isfinite(highs[estimable]).all()
-        ):
-            raise ValueError(f"{path} has non-finite estimable RACE results")
-        if require_full_coverage and not coverage.eq(1.0).all():
-            raise ValueError(f"{path} has incomplete open-model RACE coverage")
-
-    multiclass_files: list[tuple[str, tuple[str, ...], str]] = [
-        ("race_multiclass_open.tsv", OPEN_MODELS, "strict_complete")
-    ]
-    if cohort_name == "paper":
-        multiclass_files.append(
-            (
-                "race_multiclass_paper_global_complete_case.tsv",
-                PAPER_MODELS,
-                "global_complete_case_mnar",
-            )
-        )
-    vector_metrics: tuple[str, ...] = (
-        "signed_frobenius_r",
-        "direction_cosine",
-        "linear_cka",
+    race_filename: str = "race_rv_open.tsv" if cohort_name == "open" else "race_rv.tsv"
+    race_path: str = os.path.join(results_dir, race_filename)
+    race: pd.DataFrame = _read_derived(race_path)
+    parameters = _validate_derived_sidecar(
+        results_dir,
+        race_path,
+        "benchmark_scripts.race_rv",
+        [("race", "sentence")],
+        models,
     )
-    magnitude_metrics: tuple[str, ...] = (
-        "aitchison_magnitude_r",
-        "fisher_rao_magnitude_r",
-        "fisher_local_magnitude_r",
-    )
-    for filename, race_cohort, missingness_policy in multiclass_files:
-        path = os.path.join(results_dir, filename)
-        frame = _read_derived(path)
-        parameters = _validate_derived_sidecar(
-            results_dir,
-            path,
-            "benchmark_scripts.race_multiclass",
-            [("race", "sentence")],
-            race_cohort,
+    expected_race_parameters: dict[str, Any] = {
+        "scopes": ["user"],
+        "representations": ["all_pairs", "anchor_a"],
+        "bootstrap_resamples": 1000,
+        "confidence_level": 0.95,
+        "seed": 42,
+        "cohort": cohort_name,
+        "requested_models": list(models),
+        "output_models": sorted(models),
+        "missingness_policy": "pair_specific_complete_case",
+    }
+    if parameters != expected_race_parameters:
+        raise ValueError(f"Incorrect RACE RV derivation parameters in {race_path}")
+    required_columns: set[str] = {
+        "representation",
+        "missingness_policy",
+        "expected_observations",
+        "observation_coverage",
+        "expected_prompts",
+        "prompt_coverage",
+    }
+    if not required_columns.issubset(race.columns):
+        raise ValueError(f"{race_path} omits RACE coverage metadata")
+    expected_race_keys: set[tuple[str, str, str, str, str]] = {
+        ("user", representation, model_s, model_t, metric)
+        for representation in ("all_pairs", "anchor_a")
+        for model_s, model_t in itertools.combinations(models, 2)
+        for metric in ("F_pred_rv", "F_attr_rv")
+    }
+    actual_race_keys: set[tuple[str, str, str, str, str]] = set(
+        race[["scope", "representation", "model_s", "model_t", "metric"]].itertuples(
+            index=False, name=None
         )
-        expected_multiclass_parameters: dict[str, Any] = {
-            "scopes": ["all", "system", "user"],
-            "coordinate_system": "helmert_ilr_a_b_c_d",
-            "aggregations": ["row_pooled", "prompt_equal"],
-            "bootstrap_resamples": 500,
-            "confidence_level": 0.95,
-            "seed": 20260717,
-            "cohort": "open" if race_cohort == OPEN_MODELS else "paper",
-            "requested_models": list(race_cohort),
-            "missingness_policy": missingness_policy,
-        }
-        if parameters != expected_multiclass_parameters:
-            raise ValueError(
-                f"Incorrect RACE multiclass derivation parameters in {path}"
-            )
-        required_columns: set[str] = {
-            "cohort",
-            "aggregation",
-            "missingness_policy",
-            "expected_observations",
-            "observation_coverage",
-            "n_bootstrap",
-            "n_bootstrap_valid",
-            "aligned_key_sha256",
-        }
-        if not required_columns.issubset(frame.columns):
-            raise ValueError(f"{path} omits multiclass audit metadata")
-        expected_keys: set[tuple[str, str, str, str, str]] = set()
-        for model_s, model_t in itertools.combinations(race_cohort, 2):
-            expected_keys.update(
-                (
-                    "prediction",
-                    "row_pooled",
-                    model_s,
-                    model_t,
-                    metric,
-                )
-                for metric in vector_metrics
-            )
-            expected_keys.update(
-                (
-                    scope,
-                    aggregation,
-                    model_s,
-                    model_t,
-                    metric,
-                )
-                for scope in ("all", "system", "user")
-                for aggregation in ("row_pooled", "prompt_equal")
-                for metric in (*vector_metrics, *magnitude_metrics)
-            )
-        actual_keys: set[tuple[str, str, str, str, str]] = set(
-            frame[["scope", "aggregation", "model_s", "model_t", "metric"]].itertuples(
-                index=False, name=None
-            )
-        )
-        if actual_keys != expected_keys:
-            raise ValueError(f"{path} has an incorrect multiclass result grid")
-        expected_cohort_name: str = "open" if race_cohort == OPEN_MODELS else "paper"
-        if set(frame["cohort"].astype(str)) != {expected_cohort_name} or set(
-            frame["missingness_policy"].astype(str)
-        ) != {missingness_policy}:
-            raise ValueError(f"{path} has incorrect multiclass cohort metadata")
-        observed = pd.to_numeric(frame["n_observations"], errors="coerce")
-        expected = pd.to_numeric(frame["expected_observations"], errors="coerce")
-        coverage = pd.to_numeric(frame["observation_coverage"], errors="coerce")
-        points = pd.to_numeric(frame["f_point"], errors="coerce")
-        lows = pd.to_numeric(frame["f_lo"], errors="coerce")
-        highs = pd.to_numeric(frame["f_hi"], errors="coerce")
-        bootstrap = pd.to_numeric(frame["n_bootstrap"], errors="coerce")
-        bootstrap_valid = pd.to_numeric(frame["n_bootstrap_valid"], errors="coerce")
-        if (
-            observed.isna().any()
-            or expected.isna().any()
-            or coverage.isna().any()
-            or not np.isfinite(points).all()
-            or not np.isfinite(lows).all()
-            or not np.isfinite(highs).all()
-            or not np.allclose(coverage, observed / expected)
-            or not bootstrap.eq(500).all()
-            or not bootstrap_valid.ge(0.9 * bootstrap).all()
-            or frame["aligned_key_sha256"].astype(str).str.len().ne(64).any()
-        ):
-            raise ValueError(f"{path} has invalid multiclass estimates or metadata")
-        if missingness_policy == "strict_complete" and not coverage.eq(1.0).all():
-            raise ValueError(f"{path} has incomplete strict multiclass coverage")
-        if missingness_policy == "global_complete_case_mnar":
-            for _, group in frame.groupby("scope"):
-                if (
-                    group["n_observations"].nunique() != 1
-                    or group["n_prompts"].nunique() != 1
-                    or group["aligned_key_sha256"].nunique() != 1
-                ):
-                    raise ValueError(
-                        f"{path} does not use one cohort-global complete-case set"
-                    )
-
-    rv_open: pd.DataFrame = _read_derived(os.path.join(results_dir, "race_rv_open.tsv"))
-    multiclass_open: pd.DataFrame = _read_derived(
-        os.path.join(results_dir, "race_multiclass_open.tsv")
     )
-    rv_comparison: pd.DataFrame = rv_open[
-        (rv_open["representation"] == "all_pairs")
-        & (
-            (rv_open["metric"] == "F_attr_rv")
-            | ((rv_open["metric"] == "F_pred_rv") & (rv_open["scope"] == "all"))
-        )
-    ][["scope", "model_s", "model_t", "metric", "f_point"]].copy()
-    rv_comparison.loc[rv_comparison["metric"] == "F_pred_rv", "scope"] = "prediction"
-    multiclass_comparison: pd.DataFrame = multiclass_open[
-        (multiclass_open["metric"] == "linear_cka")
-        & (multiclass_open["aggregation"] == "row_pooled")
-    ][["scope", "model_s", "model_t", "f_point"]].copy()
-    comparison: pd.DataFrame = rv_comparison.merge(
-        multiclass_comparison,
-        on=["scope", "model_s", "model_t"],
-        suffixes=("_rv", "_multiclass"),
-        validate="one_to_one",
-    )
-    if len(comparison) != len(multiclass_comparison) or not np.allclose(
-        comparison["f_point_rv"],
-        comparison["f_point_multiclass"],
-        rtol=1e-10,
-        atol=1e-12,
+    if actual_race_keys != expected_race_keys:
+        raise ValueError(f"{race_path} has an incorrect RACE result grid")
+    if (
+        set(race["statistic"].astype(str)) != {"rv"}
+        or set(race["missingness_policy"].astype(str))
+        != {"pair_specific_complete_case"}
+        or set(race["aggregation"].astype(str)) != {"row_pooled"}
     ):
-        raise ValueError("Open RACE all-pairs RV and CLR-basis linear CKA do not agree")
+        raise ValueError(f"{race_path} has incorrect RACE method metadata")
+
+    observed: pd.Series = pd.to_numeric(race["n_observations"], errors="coerce")
+    expected: pd.Series = pd.to_numeric(race["expected_observations"], errors="coerce")
+    coverage: pd.Series = pd.to_numeric(race["observation_coverage"], errors="coerce")
+    observed_prompts: pd.Series = pd.to_numeric(race["n_prompts"], errors="coerce")
+    expected_prompts: pd.Series = pd.to_numeric(
+        race["expected_prompts"], errors="coerce"
+    )
+    prompt_coverage: pd.Series = pd.to_numeric(race["prompt_coverage"], errors="coerce")
+    if (
+        observed.isna().any()
+        or expected.isna().any()
+        or observed_prompts.isna().any()
+        or expected_prompts.isna().any()
+        or not coverage.between(0.0, 1.0).all()
+        or not prompt_coverage.between(0.0, 1.0).all()
+        or not np.allclose(coverage, observed / expected)
+        or not np.allclose(prompt_coverage, observed_prompts / expected_prompts)
+    ):
+        raise ValueError(f"{race_path} has inconsistent RACE coverage")
+    points: pd.Series = pd.to_numeric(race["f_point"], errors="coerce")
+    lows: pd.Series = pd.to_numeric(race["f_lo"], errors="coerce")
+    highs: pd.Series = pd.to_numeric(race["f_hi"], errors="coerce")
+    estimable: pd.Series = observed.ge(3)
+    if not (
+        np.isfinite(points[estimable]).all()
+        and np.isfinite(lows[estimable]).all()
+        and np.isfinite(highs[estimable]).all()
+    ):
+        raise ValueError(f"{race_path} has non-finite estimable RACE results")
 
 
 def main() -> None:
@@ -3935,11 +2892,6 @@ def main() -> None:
         "--require-derived",
         action="store_true",
         help="Also require complete F-table and RACE derived outputs.",
-    )
-    parser.add_argument(
-        "--require-reconciliation",
-        action="store_true",
-        help="Also require and verify the paper/archive reconciliation bundle.",
     )
     parser.add_argument(
         "--allow-non-gold-manifests",
@@ -3965,9 +2917,6 @@ def main() -> None:
     args: argparse.Namespace = parser.parse_args()
     if args.skip_manifest and args.verify_manifest:
         parser.error("--skip-manifest and --verify-manifest are mutually exclusive")
-    if args.require_reconciliation and args.cohort != "paper":
-        parser.error("--require-reconciliation requires --cohort paper")
-
     if args.dataset_dir is not None:
         _validate_dataset_snapshots(args.dataset_dir)
     if args.manifests_only:
@@ -3996,8 +2945,6 @@ def main() -> None:
             )
         )
     _validate_open_model_identity_consistency(args.results_dir)
-    if args.cohort == "paper" and not args.allow_non_gold_manifests:
-        _validate_open_audit_receipts(args.results_dir)
     if (
         args.dataset_dir is not None
         and args.cohort == "paper"
@@ -4036,26 +2983,17 @@ def main() -> None:
             args.cohort,
             required_models,
         )
-    reconciliation_directory: str = os.path.join(args.results_dir, "reconciliation")
-    reconciliation_present: bool = any(
-        os.path.exists(os.path.join(reconciliation_directory, filename))
-        for filename in RELEASE_RECONCILIATION_FILES
-    )
-    if args.require_reconciliation or reconciliation_present:
-        _validate_reconciliation_outputs(args.results_dir)
     if args.verify_manifest:
         _validate_release_inventory(
             args.results_dir,
             args.cohort,
             require_manifest=True,
-            require_reconciliation=args.require_reconciliation,
         )
         _validate_artifact_manifest(args.results_dir)
     elif not args.skip_manifest:
         _validate_release_inventory(
             args.results_dir,
             args.cohort,
-            require_reconciliation=args.require_reconciliation,
         )
         _write_artifact_manifest(args.results_dir)
     print(f"Validated {len(summaries)} model/configuration outputs")

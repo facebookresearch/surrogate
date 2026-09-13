@@ -13,7 +13,7 @@ CURRENCY_SYMBOLS: str = (
     "$¢£¤¥֏؋৲৳৻૱௹฿៛\u20a0-\u20bd\ua838\ufdfc\ufe69\uff04\uffe0\uffe1\uffe5\uffe6"
 )
 # Word regex that matches a word together with up to two leading spaces so
-# word-level ablations preserve the historical pregrouper behavior.
+# Word-level ablations preserve the established pregrouper behavior.
 WORD_RX: re.Pattern[str] = re.compile(
     r"((?: {,2})?'?(?<!\w)["
     + CURRENCY_SYMBOLS

@@ -15,9 +15,8 @@ dependencies = [
     "transformers>=4.30",
     "accelerate>=0.20",
     "numpy>=1.24",
-    # Receipt projection hashes were sealed with pandas 2.2.3. Pandas 3
-    # serializes parsed floating-point TSV values differently.
-    "pandas==2.2.3",
+    # Keep derived TSV serialization stable across environments.
+    "pandas==2.3.3",
     "scipy>=1.10",
     "tqdm>=4.60",
     "datasets>=2.14",

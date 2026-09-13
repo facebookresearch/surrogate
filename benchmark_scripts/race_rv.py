@@ -254,6 +254,14 @@ def compute_race_rv(
                 "F_pred_rv": int(manifest["prompt_idx"].nunique()),
                 "F_attr_rv": len(manifest) if allowed is None else len(allowed),
             }
+            expected_prompts_by_metric: dict[str, int] = {
+                "F_pred_rv": int(manifest["prompt_idx"].nunique()),
+                "F_attr_rv": int(
+                    manifest["prompt_idx"].nunique()
+                    if allowed is None
+                    else len({prompt_idx for prompt_idx, _ in allowed})
+                ),
+            }
             for metric, signals in (
                 ("F_pred_rv", predictions),
                 ("F_attr_rv", scoped_attrs),
@@ -282,6 +290,8 @@ def compute_race_rv(
                             confidence,
                             rng,
                         )
+                        n_prompts: int = len(np.unique(clusters))
+                        expected_prompts: int = expected_prompts_by_metric[metric]
                         output_rows.append(
                             {
                                 "benchmark": "race",
@@ -296,7 +306,9 @@ def compute_race_rv(
                                 "missingness_policy": "pair_specific_complete_case",
                                 "expected_observations": expected_by_metric[metric],
                                 "n_observations": len(x),
-                                "n_prompts": len(np.unique(clusters)),
+                                "n_prompts": n_prompts,
+                                "expected_prompts": expected_prompts,
+                                "prompt_coverage": n_prompts / expected_prompts,
                                 "observation_coverage": (
                                     len(x) / expected_by_metric[metric]
                                 ),
@@ -313,7 +325,7 @@ def main() -> None:
     parser.add_argument("--results-dir", default="results")
     parser.add_argument("--output", default=None)
     parser.add_argument(
-        "--scopes", nargs="+", default=["all"], choices=["all", "system", "user"]
+        "--scopes", nargs="+", default=["user"], choices=["all", "system", "user"]
     )
     parser.add_argument("--bootstrap-resamples", type=int, default=1000)
     parser.add_argument("--confidence-level", type=float, default=0.95)

@@ -22,7 +22,7 @@ from benchmark_scripts.derived_provenance import (
     sha256_file,
     write_derived_provenance,
 )
-from benchmark_scripts import f_table, race_multiclass, race_rv
+from benchmark_scripts import f_table, race_rv
 
 
 class TestDerivedProvenance(TestCase):
@@ -133,7 +133,7 @@ class TestDerivedProvenance(TestCase):
                     root_dir=root_dir,
                 )
 
-    def test_all_three_generators_write_sidecars(self) -> None:
+    def test_both_generators_write_sidecars(self) -> None:
         with tempfile.TemporaryDirectory() as results_dir:
             config_dir: str = os.path.join(results_dir, "race", "sentence")
             os.makedirs(config_dir)
@@ -175,30 +175,6 @@ class TestDerivedProvenance(TestCase):
                 race_rv.main()
             self._assert_sidecar(rv_output, "benchmark_scripts.race_rv")
 
-            multiclass_output: str = os.path.join(results_dir, "race_multiclass.tsv")
-            with (
-                patch.object(
-                    race_multiclass,
-                    "compute_race_multiclass",
-                    return_value=race_frame,
-                ),
-                patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "race_multiclass",
-                        "--results-dir",
-                        results_dir,
-                        "--output",
-                        multiclass_output,
-                        "--cohort",
-                        "open",
-                    ],
-                ),
-            ):
-                race_multiclass.main()
-            self._assert_sidecar(multiclass_output, "benchmark_scripts.race_multiclass")
-
             scalar_input: str = os.path.join(results_dir, "boolq_sentence_segments.tsv")
             with open(scalar_input, "w", encoding="utf-8") as output:
                 output.write("fixture\n")
@@ -227,14 +203,18 @@ class TestDerivedProvenance(TestCase):
                 "readout_contrast": "not_applicable",
                 "availability_status": "available",
                 "unavailable_reason": "",
-                "api_infinity_policy": "drop",
+                "api_infinity_policy": "pairwise_complete",
                 "aggregation": "row_pooled",
                 "model_s": "model-a",
                 "model_t": "model-b",
                 "metric": "F_pred",
                 "statistic": "pearson_r2",
                 "n_observations": 3,
+                "expected_observations": 3,
+                "observation_coverage": 1.0,
                 "n_prompts": 3,
+                "expected_prompts": 3,
+                "prompt_coverage": 1.0,
                 "f_point": 1.0,
                 "f_lo": 1.0,
                 "f_hi": 1.0,
