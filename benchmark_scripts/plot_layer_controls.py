@@ -325,6 +325,7 @@ def _plot_control_band(
         x,
         data.series[_column(family, _CONTROL_MEDIAN_SUFFIX)],
         color=color,
+        linestyle="--",
         linewidth=1.8,
         label=line_label,
         zorder=2,
