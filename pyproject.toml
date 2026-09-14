@@ -15,7 +15,8 @@ dependencies = [
     "transformers>=4.30",
     "accelerate>=0.20",
     "numpy>=1.24",
-    "pandas>=2.0",
+    # Keep derived TSV serialization stable across environments.
+    "pandas==2.3.3",
     "scipy>=1.10",
     "tqdm>=4.60",
     "datasets>=2.14",
@@ -25,6 +26,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
+]
+plots = [
+    "matplotlib>=3.7",
 ]
 
 [tool.setuptools.packages.find]

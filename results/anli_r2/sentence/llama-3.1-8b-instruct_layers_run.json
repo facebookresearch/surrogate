@@ -1,0 +1,268 @@
+{
+  "alignment": {
+    "direction": "uniform sum of accepted label unembedding rows; each unordered contrast follows configured label order",
+    "multi_alias_status": "diagnostic approximation to grouped-logsumexp attribution"
+  },
+  "artifact": {
+    "filename": "llama-3.1-8b-instruct_layers.tsv.gz",
+    "rows": 302379,
+    "sha256": "2b09ef0fd2baab50a9dba4b531cc03c2ffa261546d77e3ed55e9a58185dab52b"
+  },
+  "benchmark": "anli_r2",
+  "dataset": {
+    "hf_name": null,
+    "hf_path": "facebook/anli",
+    "hf_split": "test_r2",
+    "normalized_frame_sha256": "7ba865cc33a6e5b81a1102b6270c3e8e556302d2186194aa77e8e6d0bf228150",
+    "prompts": 1000,
+    "snapshot_filename": "facebook_anli_test_r2.tsv",
+    "snapshot_sha256": "10ebd3593714d7fe106a5e2ed7f22ea47a34100aad713d8fde4d190d896479ef"
+  },
+  "label_score_definition": "intermediate slots store logsumexp of accepted alias logits; the final slot stores logsumexp of the model's native-dtype full-head log-probabilities to match ordinary outputs; pairwise differences are grouped-label log-probability contrasts",
+  "labels": {
+    "contradiction": {
+      "accepted_single_token_aliases": [
+        {
+          "alias": "contr",
+          "surface": "contr",
+          "token_id": 8386
+        },
+        {
+          "alias": "Contr",
+          "surface": "Contr",
+          "token_id": 42537
+        },
+        {
+          "alias": "sp_contr",
+          "surface": " contr",
+          "token_id": 6155
+        },
+        {
+          "alias": "sp_Contr",
+          "surface": " Contr",
+          "token_id": 35341
+        },
+        {
+          "alias": "sp_CONTR",
+          "surface": " CONTR",
+          "token_id": 11831
+        },
+        {
+          "alias": "us_contr",
+          "surface": "_contr",
+          "token_id": 63763
+        }
+      ],
+      "deduplicated_single_token_aliases": [],
+      "rejected_multitoken_aliases": [
+        {
+          "alias": "CONTR",
+          "surface": "CONTR",
+          "token_ids": [
+            5910,
+            2434
+          ]
+        },
+        {
+          "alias": "us_Contr",
+          "surface": "_Contr",
+          "token_ids": [
+            15450,
+            376
+          ]
+        },
+        {
+          "alias": "us_CONTR",
+          "surface": "_CONTR",
+          "token_ids": [
+            4405,
+            2434
+          ]
+        }
+      ]
+    },
+    "entailment": {
+      "accepted_single_token_aliases": [
+        {
+          "alias": "ent",
+          "surface": "ent",
+          "token_id": 306
+        },
+        {
+          "alias": "Ent",
+          "surface": "Ent",
+          "token_id": 2300
+        },
+        {
+          "alias": "ENT",
+          "surface": "ENT",
+          "token_id": 1863
+        },
+        {
+          "alias": "sp_ent",
+          "surface": " ent",
+          "token_id": 1218
+        },
+        {
+          "alias": "sp_Ent",
+          "surface": " Ent",
+          "token_id": 4968
+        },
+        {
+          "alias": "sp_ENT",
+          "surface": " ENT",
+          "token_id": 28916
+        },
+        {
+          "alias": "us_ent",
+          "surface": "_ent",
+          "token_id": 28525
+        },
+        {
+          "alias": "us_Ent",
+          "surface": "_Ent",
+          "token_id": 51603
+        },
+        {
+          "alias": "us_ENT",
+          "surface": "_ENT",
+          "token_id": 16639
+        }
+      ],
+      "deduplicated_single_token_aliases": [],
+      "rejected_multitoken_aliases": []
+    },
+    "neutral": {
+      "accepted_single_token_aliases": [
+        {
+          "alias": "neutral",
+          "surface": "neutral",
+          "token_id": 60668
+        },
+        {
+          "alias": "Neutral",
+          "surface": "Neutral",
+          "token_id": 88007
+        },
+        {
+          "alias": "sp_neutral",
+          "surface": " neutral",
+          "token_id": 21277
+        },
+        {
+          "alias": "sp_Neutral",
+          "surface": " Neutral",
+          "token_id": 59794
+        }
+      ],
+      "deduplicated_single_token_aliases": [],
+      "rejected_multitoken_aliases": [
+        {
+          "alias": "NEUTRAL",
+          "surface": "NEUTRAL",
+          "token_ids": [
+            4031,
+            1406,
+            52831
+          ]
+        },
+        {
+          "alias": "sp_NEUTRAL",
+          "surface": " NEUTRAL",
+          "token_ids": [
+            8014,
+            1406,
+            52831
+          ]
+        },
+        {
+          "alias": "us_neutral",
+          "surface": "_neutral",
+          "token_ids": [
+            14250,
+            14587
+          ]
+        },
+        {
+          "alias": "us_Neutral",
+          "surface": "_Neutral",
+          "token_ids": [
+            1635,
+            68,
+            14587
+          ]
+        },
+        {
+          "alias": "us_NEUTRAL",
+          "surface": "_NEUTRAL",
+          "token_ids": [
+            14366,
+            1406,
+            52831
+          ]
+        }
+      ]
+    }
+  },
+  "layer_slots": {
+    "convention": "slot 0 is the embedding output; slot k+1 is decoder block k output; final norm is applied before all scores",
+    "count": 33
+  },
+  "manifest_sha256": "923f81406da064408d70f5da36447f59a16fc3f8f6e36773257f73a86b7d20ce",
+  "model": "llama-3.1-8b-instruct",
+  "model_artifact_hash_timing": "pre_model_load",
+  "model_artifact_manifest_sha256": "6e5b9a49f9f077fa78d65de615b45fd56150ed900e7024a46d50ee8ce7988dea",
+  "model_artifact_sha256": {
+    "config.json": "29e4c210b0d6ac178b16b2a255a568bdb23b581e50ca1ef6a6d071dd85704e6e",
+    "generation_config.json": "189fb0c0d7fd8a527db217c0a60a0e013f0394cd8800f9697a666a9e75e5f7fd",
+    "model-00001-of-00004.safetensors": "2b1879f356aed350030bb40eb45ad362c89d9891096f79a3ab323d3ba5607668",
+    "model-00002-of-00004.safetensors": "09d433f650646834a83c580877bd60c6d1f88f7755305c12576b5c7058f9af15",
+    "model-00003-of-00004.safetensors": "fc1cdddd6bfa91128d6e94ee73d0ce62bfcdb7af29e978ddcab30c66ae9ea7fa",
+    "model-00004-of-00004.safetensors": "92ecfe1a2414458b4821ac8c13cf8cb70aed66b5eea8dc5ad9eeb4ff309d6d7b",
+    "model.safetensors.index.json": "146776fce3f6db1103aa6f249e65ee5544c5923ce6f971b092eee79aa6e5d37b",
+    "special_tokens_map.json": "6f38c73729248f6c127296386e3cdde96e254636cc58b4169d3fd32328d9a8ec",
+    "tokenizer.json": "79e3e522635f3171300913bb421464a87de6222182a0570b9b2ccba2a964b2b4",
+    "tokenizer_config.json": "24de3cbb3d0f5632f4cfcefbf0bd5c1772e26a0e4e954b8e9dbc634e1d2d5573"
+  },
+  "model_identity_files_sha256": {
+    "config.json": "29e4c210b0d6ac178b16b2a255a568bdb23b581e50ca1ef6a6d071dd85704e6e",
+    "generation_config.json": "189fb0c0d7fd8a527db217c0a60a0e013f0394cd8800f9697a666a9e75e5f7fd",
+    "model.safetensors.index.json": "146776fce3f6db1103aa6f249e65ee5544c5923ce6f971b092eee79aa6e5d37b",
+    "tokenizer.json": "79e3e522635f3171300913bb421464a87de6222182a0570b9b2ccba2a964b2b4",
+    "tokenizer_config.json": "24de3cbb3d0f5632f4cfcefbf0bd5c1772e26a0e4e954b8e9dbc634e1d2d5573"
+  },
+  "model_revision": "0e9e39f249a16976918f6564b8830bc894c89659",
+  "model_source": "meta-llama/Llama-3.1-8B-Instruct",
+  "parameters": {
+    "attention_implementation": "sdpa",
+    "batch_size": 32,
+    "canary": false,
+    "device_map": "auto",
+    "max_samples": null,
+    "rendered_chat_add_special_tokens": false,
+    "seed": 42,
+    "torch_dtype": "bfloat16"
+  },
+  "pregrouper": "sentence",
+  "schema_version": 1,
+  "segmentation_scope": "full_dialog_in_message_order",
+  "software": {
+    "cuda_runtime": "13.3.0",
+    "numpy": "2.2.1",
+    "pandas": "2.2.3",
+    "torch": "2.15.0a0+fb",
+    "transformers": "5.5.0"
+  },
+  "source_hash_timing": "run_start",
+  "source_sha256": {
+    "benchmark_scripts/benchmark_config.py": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
+    "benchmark_scripts/provenance_sources.py": "97f9094e680f29d9cb908ddf64a5df52ba5c30f09d3135bb71459eab29e48317",
+    "benchmark_scripts/run_layerwise.py": "718b4d3e8c8bcd920259f61055217243090afa739748d28b6db78d817d9e27f1",
+    "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
+    "surrogate/layerwise_scoring.py": "49474e2df6cd66227f3cf538afa371b6798e3632f16e4a31d40988d6ac71411c",
+    "surrogate/model_types.py": "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd",
+    "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+    "surrogate/transformers_model.py": "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b",
+    "surrogate/utils.py": "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638"
+  }
+}

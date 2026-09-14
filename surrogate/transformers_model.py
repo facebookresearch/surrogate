@@ -102,6 +102,30 @@ class TransformersModel:
                 f"Model {self.model_name} not loaded. Call .load() first."
             )
 
+    def _tokenize_rendered_text(
+        self,
+        text: str | list[str],
+        **kwargs: Any,
+    ) -> Any:
+        """Tokenize chat-template output without adding control tokens twice.
+
+        ``dialog_to_text`` returns a fully rendered model-specific chat prompt.
+        In particular, Llama templates already begin with ``<|begin_of_text|>``;
+        the tokenizer's default ``add_special_tokens=True`` would prepend a
+        second BOS token and materially change the model output.
+
+        Args:
+            text: One rendered prompt or a batch of rendered prompts.
+            **kwargs: Additional tokenizer keyword arguments.
+
+        Returns:
+            The matching tokenizer output.
+        """
+        self._ensure_loaded()
+        if "add_special_tokens" in kwargs:
+            raise ValueError("rendered-text tokenization owns add_special_tokens")
+        return self._tokenizer(text, add_special_tokens=False, **kwargs)
+
     @torch.no_grad()
     def get_next_token_log_probs(self, text: str) -> torch.Tensor:
         """
@@ -119,7 +143,13 @@ class TransformersModel:
         """
         self._ensure_loaded()
 
-        inputs: dict[str, torch.Tensor] = self._tokenizer(text, return_tensors="pt")
+        # ``text`` is already rendered by ``apply_chat_template`` and therefore
+        # already contains any model-specific BOS/control tokens. Asking the
+        # tokenizer to add them again duplicates Llama's BOS token.
+        inputs: dict[str, torch.Tensor] = self._tokenize_rendered_text(
+            text,
+            return_tensors="pt",
+        )
         input_ids: torch.Tensor = inputs["input_ids"].to(self._model.device)
         attention_mask: torch.Tensor | None = inputs.get("attention_mask")
         if attention_mask is not None:
@@ -152,7 +182,11 @@ class TransformersModel:
         if self._tokenizer.pad_token is None:
             self._tokenizer.pad_token = self._tokenizer.eos_token
 
-        inputs: Any = self._tokenizer(texts, return_tensors="pt", padding=True)
+        inputs: Any = self._tokenize_rendered_text(
+            texts,
+            return_tensors="pt",
+            padding=True,
+        )
         input_ids: torch.Tensor = inputs["input_ids"].to(self._model.device)
         attention_mask: torch.Tensor = inputs["attention_mask"].to(self._model.device)
 
@@ -285,7 +319,11 @@ class TransformersModel:
         if self._tokenizer.pad_token is None:
             self._tokenizer.pad_token = self._tokenizer.eos_token
 
-        inputs: Any = self._tokenizer(texts, return_tensors="pt", padding=True)
+        inputs: Any = self._tokenize_rendered_text(
+            texts,
+            return_tensors="pt",
+            padding=True,
+        )
         input_ids: torch.Tensor = inputs["input_ids"].to(self._model.device)
         attention_mask: torch.Tensor = inputs["attention_mask"].to(self._model.device)
 

@@ -10,10 +10,19 @@ build/
 .pytest_cache/
 .mypy_cache/
 
-benchmark_scripts/mg_run_benchmark.py
+**/*_consolidated.tsv
 
 # Bulky regeneratable outputs — per-model gzipped TSVs ARE committed
 # (results/{benchmark}/{pregrouper}/*.tsv.gz). Anything else under
 # results/ is regeneratable from those + the postprocess scripts.
 results/**/*.tsv
+# Layer-control projection tensors are multi-gigabyte regeneration artifacts.
+results/**/*_layer_controls.npy
+results/**/*_layer_controls_run.json
 !results/f_table.tsv
+!results/f_table_finite_extreme_sensitivity.tsv
+!results/race_rv_open.tsv
+!results/race_rv.tsv
+!results/layerwise_fidelity.tsv
+!results/coverage.tsv
+!results/artifact_manifest.json

@@ -1,0 +1,187 @@
+{
+  "alignment": {
+    "direction": "uniform sum of accepted label unembedding rows; each unordered contrast follows configured label order",
+    "multi_alias_status": "diagnostic approximation to grouped-logsumexp attribution"
+  },
+  "artifact": {
+    "filename": "qwen2.5-0.5b-instruct_layers.tsv.gz",
+    "rows": 769650,
+    "sha256": "2d758c107bc6f1cc008232b654454a8f6ac1907e454560cf258a8cb3d5070d1c"
+  },
+  "benchmark": "boolq",
+  "dataset": {
+    "hf_name": "boolq",
+    "hf_path": "aps/super_glue",
+    "hf_split": "validation",
+    "normalized_frame_sha256": "8ef3b29d17186097b1857dcb6552f404b24157b7edd670d0eaa0121245167a0b",
+    "prompts": 3270,
+    "snapshot_filename": "google_boolq_validation.tsv",
+    "snapshot_sha256": "80040aa10f18e5b01082386dae3bdde48931a0311e807f6cb10f7173995f346a"
+  },
+  "label_score_definition": "intermediate slots store logsumexp of accepted alias logits; the final slot stores logsumexp of the model's native-dtype full-head log-probabilities to match ordinary outputs; pairwise differences are grouped-label log-probability contrasts",
+  "labels": {
+    "false": {
+      "accepted_single_token_aliases": [
+        {
+          "alias": "false",
+          "surface": "false",
+          "token_id": 3849
+        },
+        {
+          "alias": "False",
+          "surface": "False",
+          "token_id": 4049
+        },
+        {
+          "alias": "FALSE",
+          "surface": "FALSE",
+          "token_id": 30351
+        },
+        {
+          "alias": "sp_false",
+          "surface": " false",
+          "token_id": 895
+        },
+        {
+          "alias": "sp_False",
+          "surface": " False",
+          "token_id": 3557
+        },
+        {
+          "alias": "sp_FALSE",
+          "surface": " FALSE",
+          "token_id": 7833
+        },
+        {
+          "alias": "us_false",
+          "surface": "_false",
+          "token_id": 36015
+        },
+        {
+          "alias": "us_FALSE",
+          "surface": "_FALSE",
+          "token_id": 18125
+        }
+      ],
+      "deduplicated_single_token_aliases": [],
+      "rejected_multitoken_aliases": [
+        {
+          "alias": "us_False",
+          "surface": "_False",
+          "token_ids": [
+            1400,
+            710
+          ]
+        }
+      ]
+    },
+    "true": {
+      "accepted_single_token_aliases": [
+        {
+          "alias": "true",
+          "surface": "true",
+          "token_id": 1866
+        },
+        {
+          "alias": "True",
+          "surface": "True",
+          "token_id": 2514
+        },
+        {
+          "alias": "TRUE",
+          "surface": "TRUE",
+          "token_id": 20611
+        },
+        {
+          "alias": "sp_true",
+          "surface": " true",
+          "token_id": 830
+        },
+        {
+          "alias": "sp_True",
+          "surface": " True",
+          "token_id": 3007
+        },
+        {
+          "alias": "sp_TRUE",
+          "surface": " TRUE",
+          "token_id": 8214
+        },
+        {
+          "alias": "us_true",
+          "surface": "_true",
+          "token_id": 16082
+        },
+        {
+          "alias": "us_True",
+          "surface": "_True",
+          "token_id": 93577
+        },
+        {
+          "alias": "us_TRUE",
+          "surface": "_TRUE",
+          "token_id": 14044
+        }
+      ],
+      "deduplicated_single_token_aliases": [],
+      "rejected_multitoken_aliases": []
+    }
+  },
+  "layer_slots": {
+    "convention": "slot 0 is the embedding output; slot k+1 is decoder block k output; final norm is applied before all scores",
+    "count": 25
+  },
+  "manifest_sha256": "a4134051bfd34402494c877b3e291447e7c95547072cefdd0f26c347d1b02bb6",
+  "model": "qwen2.5-0.5b-instruct",
+  "model_artifact_hash_timing": "pre_model_load",
+  "model_artifact_manifest_sha256": "74bf6dd08049d862b3bd56ac2a84a8e1980ae93acfad71612a9ea00548e887b7",
+  "model_artifact_sha256": {
+    "config.json": "18e18afcaccafade98daf13a54092927904649e1dd4eba8299ab717d5d94ff45",
+    "generation_config.json": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6",
+    "merges.txt": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+    "model.safetensors": "fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe",
+    "tokenizer.json": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+    "tokenizer_config.json": "5b5d4f65d0acd3b2d56a35b56d374a36cbc1c8fa5cf3b3febbbfabf22f359583",
+    "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+  },
+  "model_identity_files_sha256": {
+    "config.json": "18e18afcaccafade98daf13a54092927904649e1dd4eba8299ab717d5d94ff45",
+    "generation_config.json": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6",
+    "tokenizer.json": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+    "tokenizer_config.json": "5b5d4f65d0acd3b2d56a35b56d374a36cbc1c8fa5cf3b3febbbfabf22f359583"
+  },
+  "model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "model_source": "Qwen/Qwen2.5-0.5B-Instruct",
+  "parameters": {
+    "attention_implementation": "sdpa",
+    "batch_size": 32,
+    "canary": false,
+    "device_map": "auto",
+    "max_samples": null,
+    "rendered_chat_add_special_tokens": false,
+    "seed": 42,
+    "torch_dtype": "bfloat16"
+  },
+  "pregrouper": "sentence",
+  "schema_version": 1,
+  "segmentation_scope": "full_dialog_in_message_order",
+  "software": {
+    "cuda_runtime": "13.3.0",
+    "numpy": "2.2.1",
+    "pandas": "2.2.3",
+    "torch": "2.15.0a0+fb",
+    "transformers": "5.5.0"
+  },
+  "source_hash_timing": "run_start",
+  "source_sha256": {
+    "benchmark_scripts/benchmark_config.py": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
+    "benchmark_scripts/provenance_sources.py": "97f9094e680f29d9cb908ddf64a5df52ba5c30f09d3135bb71459eab29e48317",
+    "benchmark_scripts/run_layerwise.py": "718b4d3e8c8bcd920259f61055217243090afa739748d28b6db78d817d9e27f1",
+    "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
+    "surrogate/layerwise_scoring.py": "49474e2df6cd66227f3cf538afa371b6798e3632f16e4a31d40988d6ac71411c",
+    "surrogate/model_types.py": "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd",
+    "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+    "surrogate/transformers_model.py": "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b",
+    "surrogate/utils.py": "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638"
+  }
+}

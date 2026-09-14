@@ -49,10 +49,17 @@ def _read_per_model(pattern: str) -> tuple[list[pd.DataFrame], list[str]]:
     models: list[str] = []
     # Pattern caller passes "*_segment.tsv"; we also pick up gzipped variants.
     paths: list[str] = sorted(set(glob.glob(pattern) + glob.glob(pattern + ".gz")))
+    seen_models: dict[str, str] = {}
     for path in paths:
         header: list[str] = pd.read_csv(path, sep="\t", nrows=0).columns.tolist()
         dtype: dict[str, type] = {c: str for c in string_cols if c in header}
-        df: pd.DataFrame = pd.read_csv(path, sep="\t", dtype=dtype)
+        df: pd.DataFrame = pd.read_csv(
+            path,
+            sep="\t",
+            dtype=dtype,
+            keep_default_na=False,
+            na_values=[""],
+        )
         # Extract model name from filename: strip _segment.tsv[.gz] or _tokens.tsv[.gz]
         base: str = os.path.basename(path)
         for suffix in (
@@ -62,10 +69,17 @@ def _read_per_model(pattern: str) -> tuple[list[pd.DataFrame], list[str]]:
             "_tokens.tsv",
         ):
             if base.endswith(suffix):
-                models.append(base[: -len(suffix)])
+                model_name: str = base[: -len(suffix)]
                 break
         else:
-            models.append(os.path.splitext(base)[0])
+            model_name = os.path.splitext(base)[0]
+        if model_name in seen_models:
+            raise ValueError(
+                f"Duplicate outputs for model {model_name!r}: "
+                f"{seen_models[model_name]} and {path}"
+            )
+        seen_models[model_name] = path
+        models.append(model_name)
         frames.append(df)
     return frames, models
 
