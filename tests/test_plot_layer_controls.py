@@ -107,13 +107,18 @@ class _FakePyplot:
     def __init__(self) -> None:
         self.figure: _FakeFigure = _FakeFigure()
         self.axis: _FakeAxis = _FakeAxis()
+        self.rcParams: dict[str, Any] = {}
+        self.defaults_reset: bool = False
         self.subplots_kwargs: dict[str, Any] = {}
         self.closed: bool = False
 
     def rc_context(
-        self, _style: dict[str, Any]
+        self, _style: dict[str, Any] | None = None
     ) -> contextlib.AbstractContextManager[None]:
         return contextlib.nullcontext()
+
+    def rcdefaults(self) -> None:
+        self.defaults_reset = True
 
     def subplots(
         self, *_args: Any, **kwargs: Any
@@ -220,6 +225,8 @@ class PlotLayerControlsTest(TestCase):
             {r"$F_{\mathrm{pred}}$", r"$F_{\mathrm{attr}}$", "Control"},
         )
         self.assertEqual(fake_pyplot.subplots_kwargs["figsize"], (2.75, 2.15))
+        self.assertTrue(fake_pyplot.defaults_reset)
+        self.assertEqual(fake_pyplot.rcParams["font.family"], "serif")
         self.assertEqual(
             fake_pyplot.figure.saved_metadata["Software"],
             "benchmark_scripts.plot_layer_controls",

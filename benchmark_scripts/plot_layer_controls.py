@@ -401,7 +401,10 @@ def plot_summary(summary_path: str, output_path: str) -> None:
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
     }
-    with pyplot.rc_context(style):
+    with pyplot.rc_context():
+        # Do not inherit workstation- or notebook-specific Matplotlib styles.
+        pyplot.rcdefaults()
+        pyplot.rcParams.update(style)
         # ICLR uses a 5.5-inch single-column text block. The paper currently
         # places this plot in a 0.5\textwidth wrapfigure.
         figure, axis = pyplot.subplots(figsize=(2.75, 2.15))
