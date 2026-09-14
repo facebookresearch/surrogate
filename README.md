@@ -29,8 +29,9 @@ the revised paper's public-data tables and figures from the committed result
 artifacts. It uses the canonical user-segment, pairwise-complete analysis,
 including entailment-minus-contradiction for ANLI and multivariate RV for
 RACE. The per-layer figure reports unnormalized `F_pred`, signed `F_attr`,
-their paired-bootstrap gap, and the released readout controls. A separately
-labeled tuned-lens sensitivity panel reads
+and the matched grouped readout-compatible control. Notebook-only appendix
+outputs include the prediction-attribution gap and a tuned-lens sensitivity
+panel reading
 `layer_controls/tuned_lens_boolq_fidelity.tsv`; it is exploratory because the
 lenses use one seed, sparse depth grids, and model-specific training budgets.
 
@@ -86,7 +87,7 @@ layerwise_fidelity  -> results/layerwise_fidelity.tsv
 build_layer_control_spec -> layer_controls/layer_control_spec.json
 run_layer_controls  -> external per-model projection tensors
 analyze_layer_controls -> layer_controls/layer_control_fidelity.tsv
-plot_layer_controls -> layer_controls/layer_control_fidelity.pdf
+plot_layer_controls -> paper_outputs/figures/fig5_per_layer_fidelity.pdf
 ```
 
 ### 1. Generate open-model outputs
@@ -213,7 +214,8 @@ attribution distribution.
 
 The raw projection tensors total roughly 15 GB and are intentionally kept
 outside Git. Generate them into a separate directory, then commit only the
-compact summary, compressed pair-level draw table, specification, and plot:
+compact summary, compressed pair-level draw table, specification, and
+provenance:
 
 ```bash
 python -m benchmark_scripts.build_layer_control_spec \
@@ -244,15 +246,15 @@ python -m benchmark_scripts.analyze_layer_controls \
 pip install -e ".[plots]"
 python -m benchmark_scripts.plot_layer_controls \
     layer_controls/layer_control_fidelity.tsv \
-    layer_controls/layer_control_fidelity.pdf
+    paper_outputs/figures/fig5_per_layer_fidelity.pdf
 ```
 
 The headline plot reports per-layer grouped-logsumexp `F_pred`, signed
-`F_attr`, and their paired-bootstrap difference. Target and gap ribbons are
-95% prompt-cluster bootstrap intervals; control ribbons are empirical ranges
-across directions and are not confidence intervals. Pairwise R² values are
-averaged over the ten open-model pairs and must not be interpreted additively.
-Relative depth excludes the embedding slot by default;
+`F_attr`, and the grouped 9-vs-8 readout-compatible control. Target ribbons are
+95% prompt-cluster bootstrap intervals; the control ribbon is the empirical
+2.5--97.5% range across directions, not a confidence interval. Pairwise R²
+values are averaged over the ten open-model pairs and must not be interpreted
+additively. Relative depth excludes the embedding slot by default;
 `analyze_layer_controls --include-embedding` provides an explicit all-slot
 sensitivity.
 
