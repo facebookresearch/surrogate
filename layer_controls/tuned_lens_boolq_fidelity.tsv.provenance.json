@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "analysis_status": "exploratory_sensitivity",
+  "artifact": {
+    "filename": "tuned_lens_boolq_fidelity.tsv",
+    "rows": 21,
+    "sha256": "56f8a097bac11b9e1b54a8dfa997a3f1d3de63a7fd677b245bb8f61994d61719"
+  },
+  "benchmark": "boolq",
+  "pregrouper": "sentence",
+  "scope": "user",
+  "training_dataset": {
+    "repository": "aps/super_glue",
+    "configuration": "boolq",
+    "split": "train",
+    "revision": "fd77e85946ac3435f3864f2a34bae3947c1561d0",
+    "rows": 9427,
+    "parquet_sha256": "41e2ce07ac0d3bcd411bd4b6326bab2cff5fa67bacdbbcea74bb9e001ec635d3",
+    "labels_used": false
+  },
+  "evaluation": {
+    "split": "validation",
+    "full_split_prompts": 3270,
+    "sampled_prompts": 100,
+    "user_segments": 569,
+    "seed": 42,
+    "batching": "original_alone_then_all_full_dialog_ablations_sorted_by_rendered_character_length_in_batches_of_32"
+  },
+  "lens": {
+    "family": "identity_initialized_affine_translator",
+    "readout": "translated_residual_then_frozen_final_rmsnorm_and_lm_head",
+    "objective": "full_vocabulary_kl_final_distribution_to_lens_distribution",
+    "positions_per_prompt": 4,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0
+  },
+  "models": {
+    "qwen2.5-0.5b-instruct": {
+      "revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+      "training_prompts": 512,
+      "epochs": 5,
+      "layer_stride": 1
+    },
+    "qwen2.5-3b-instruct": {
+      "revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1",
+      "training_prompts": 2048,
+      "epochs": 8,
+      "layer_stride": 2
+    },
+    "qwen2.5-7b-instruct": {
+      "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+      "training_prompts": 1024,
+      "epochs": 5,
+      "layer_stride": 4
+    },
+    "qwen2.5-14b-instruct": {
+      "revision": "cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8",
+      "training_prompts": 1024,
+      "epochs": 5,
+      "layer_stride": 4
+    },
+    "llama-3.1-8b-instruct": {
+      "revision": "0e9e39f249a16976918f6564b8830bc894c89659",
+      "training_prompts": 2048,
+      "epochs": 8,
+      "layer_stride": 2
+    }
+  },
+  "analysis": {
+    "model_pairs": 10,
+    "statistic": "pearson_r2",
+    "pair_aggregation": "mean",
+    "attribution_aggregation": "row_pooled",
+    "depth_grid_size": 21,
+    "depth_alignment": "linear_interpolation_block_outputs_only",
+    "bootstrap_resamples": 1000,
+    "bootstrap_unit": "prompt",
+    "confidence_level": 0.95,
+    "seed": 42
+  },
+  "validation": {
+    "public_untuned_intermediate_max_abs_error": 9.5367431640625e-07,
+    "public_native_endpoint_max_abs_error": 9.499490261077881e-07,
+    "tuned_and_untuned_native_endpoints_identical": true
+  },
+  "limitations": [
+    "single lens-training seed",
+    "model-specific training budgets and sparse layer strides",
+    "training KL was still improving at the final epoch",
+    "bootstrap conditions on the fitted lenses and excludes training uncertainty"
+  ]
+}

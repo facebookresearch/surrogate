@@ -29,7 +29,10 @@ the revised paper's public-data tables and figures from the committed result
 artifacts. It uses the canonical user-segment, pairwise-complete analysis,
 including entailment-minus-contradiction for ANLI and multivariate RV for
 RACE. The per-layer figure reports unnormalized `F_pred`, signed `F_attr`,
-their paired-bootstrap gap, and the released readout controls.
+their paired-bootstrap gap, and the released readout controls. A separately
+labeled tuned-lens sensitivity panel reads
+`layer_controls/tuned_lens_boolq_fidelity.tsv`; it is exploratory because the
+lenses use one seed, sparse depth grids, and model-specific training budgets.
 
 ```bash
 pip install -e ".[paper]"
