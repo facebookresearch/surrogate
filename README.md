@@ -39,6 +39,8 @@ jupyter lab notebooks/paper_figures.ipynb
 Outputs are written under `paper_outputs/` by default. Set
 `SURROGATE_PAPER_OUTPUT_DIR` to write into a paper source tree. Analyses that
 require unreleased hidden states, such as CKA, are intentionally excluded.
+If the notebook kernel was started outside the checkout and the package is not
+installed in editable mode, set `SURROGATE_REPO_ROOT=/path/to/surrogate`.
 
 ## Method
 
