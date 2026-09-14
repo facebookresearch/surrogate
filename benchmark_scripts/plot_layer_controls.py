@@ -33,8 +33,15 @@ _CONTROL_UPPER_SUFFIX: str = "q975"
 
 _PREDICTION: str = "grouped_logsumexp_prediction"
 _ATTRIBUTION: str = "grouped_logsumexp_attribution"
+_SINGLE_TOKEN_ATTRIBUTION: str = "single_token_true_false_attribution_diagnostic"
 _GROUPED_CONTROL: str = "grouped_9v8_pseudo_label"
-_SHUFFLED_GROUPED_CONTROL: str = "shuffled_grouped_9v8_pseudo_label"
+_ISOTROPIC_CONTROL: str = "independent_isotropic"
+_OBSERVATION_CONTROL: str = "observation_pair_permutation"
+_GAP: str = "prediction_minus_attribution_gap"
+
+_COLOR_PRED: str = "#584486"
+_COLOR_ATTR: str = "#0E9AAB"
+_COLOR_CONTROL: str = "#9A958F"
 
 
 def _column(prefix: str, suffix: str) -> str:
@@ -49,10 +56,15 @@ _SERIES_COLUMNS: tuple[str, ...] = (
     _column(_ATTRIBUTION, _TARGET_POINT_SUFFIX),
     _column(_ATTRIBUTION, _TARGET_LOWER_SUFFIX),
     _column(_ATTRIBUTION, _TARGET_UPPER_SUFFIX),
+    _column(_SINGLE_TOKEN_ATTRIBUTION, _TARGET_POINT_SUFFIX),
+    _column(_GAP, _TARGET_POINT_SUFFIX),
+    _column(_GAP, _TARGET_LOWER_SUFFIX),
+    _column(_GAP, _TARGET_UPPER_SUFFIX),
     _column(_GROUPED_CONTROL, _CONTROL_MEDIAN_SUFFIX),
     _column(_GROUPED_CONTROL, _CONTROL_LOWER_SUFFIX),
     _column(_GROUPED_CONTROL, _CONTROL_UPPER_SUFFIX),
-    _column(_SHUFFLED_GROUPED_CONTROL, _CONTROL_MEDIAN_SUFFIX),
+    _column(_ISOTROPIC_CONTROL, _CONTROL_MEDIAN_SUFFIX),
+    _column(_OBSERVATION_CONTROL, _CONTROL_MEDIAN_SUFFIX),
 )
 
 
@@ -198,10 +210,22 @@ def load_plot_data(summary_path: str) -> LayerControlPlotData:
         column: _numeric_series(depth_rows, column) for column in _SERIES_COLUMNS
     }
     for column, values in series.items():
-        if np.any(values < 0.0) or np.any(values > 1.0):
-            raise ValueError(
-                f"summary TSV R-squared column {column!r} is outside [0, 1]"
-            )
+        lower_bound: float = -1.0 if column.startswith(_GAP) else 0.0
+        if np.any(values < lower_bound) or np.any(values > 1.0):
+            valid_range: str = "[-1, 1]" if column.startswith(_GAP) else "[0, 1]"
+            raise ValueError(f"summary TSV column {column!r} is outside {valid_range}")
+
+    expected_gap: np.ndarray = (
+        series[_column(_PREDICTION, _TARGET_POINT_SUFFIX)]
+        - series[_column(_ATTRIBUTION, _TARGET_POINT_SUFFIX)]
+    )
+    if not np.allclose(
+        series[_column(_GAP, _TARGET_POINT_SUFFIX)],
+        expected_gap,
+        rtol=0.0,
+        atol=1e-12,
+    ):
+        raise ValueError("summary TSV gap does not equal F_pred minus F_attr")
 
     _validate_interval(
         series,
@@ -209,7 +233,7 @@ def load_plot_data(summary_path: str) -> LayerControlPlotData:
         _column(_GROUPED_CONTROL, _CONTROL_MEDIAN_SUFFIX),
         _column(_GROUPED_CONTROL, _CONTROL_UPPER_SUFFIX),
     )
-    for target in (_PREDICTION, _ATTRIBUTION):
+    for target in (_PREDICTION, _ATTRIBUTION, _GAP):
         lower: str = _column(target, _TARGET_LOWER_SUFFIX)
         upper: str = _column(target, _TARGET_UPPER_SUFFIX)
         if np.any(series[lower] > series[upper]):
@@ -376,7 +400,7 @@ def plot_summary(summary_path: str, output_path: str) -> None:
         "ps.fonttype": 42,
     }
     with pyplot.rc_context(style):
-        figure, axes = pyplot.subplots(1, 2, figsize=(11.2, 4.5), sharey=True)
+        figure, axes = pyplot.subplots(1, 2, figsize=(11.2, 4.5))
         panel_a: Any = axes[0]
         panel_b: Any = axes[1]
 
@@ -384,48 +408,133 @@ def plot_summary(summary_path: str, output_path: str) -> None:
             panel_a,
             data,
             _PREDICTION,
-            color="#0072B2",
-            line_label=r"Grouped-logsumexp $F_{\mathrm{pred}}$",
+            color=_COLOR_PRED,
+            line_label=r"$F_{\mathrm{pred}}$",
             ribbon_label=r"$F_{\mathrm{pred}}$: 95% prompt-bootstrap CI",
         )
-        panel_a.set_title("A  Prediction fidelity", loc="left")
-
         _plot_target(
-            panel_b,
+            panel_a,
             data,
             _ATTRIBUTION,
-            color="#0072B2",
-            line_label=r"Signed grouped-logsumexp $F_{\mathrm{attr}}$",
+            color=_COLOR_ATTR,
+            line_label=r"Signed $F_{\mathrm{attr}}$",
             ribbon_label=r"$F_{\mathrm{attr}}$: 95% prompt-bootstrap CI",
         )
+        panel_a.plot(
+            data.relative_depth,
+            data.series[_column(_SINGLE_TOKEN_ATTRIBUTION, _TARGET_POINT_SUFFIX)],
+            color=_COLOR_ATTR,
+            linestyle="--",
+            linewidth=1.4,
+            alpha=0.72,
+            label="Single-token attribution diagnostic",
+            zorder=2,
+        )
         _plot_control_band(
-            panel_b,
+            panel_a,
             data,
             _GROUPED_CONTROL,
-            color="#D55E00",
-            line_label="Signed grouped 9-vs-8 controls (median)",
-            ribbon_label="Controls: empirical 2.5–97.5% direction range",
+            color=_COLOR_CONTROL,
+            line_label="Readout-compatible controls (median)",
+            ribbon_label="Controls: empirical 2.5–97.5% readout range",
+        )
+        panel_a.plot(
+            data.relative_depth,
+            data.series[_column(_OBSERVATION_CONTROL, _CONTROL_MEDIAN_SUFFIX)],
+            color=_COLOR_CONTROL,
+            linestyle=":",
+            linewidth=1.5,
+            label="Observation-pair permutation",
+            zorder=2,
+        )
+        panel_a.plot(
+            data.relative_depth,
+            data.series[_column(_ISOTROPIC_CONTROL, _CONTROL_MEDIAN_SUFFIX)],
+            color=_COLOR_CONTROL,
+            linestyle="-.",
+            linewidth=1.5,
+            label="Independent isotropic (single-token diagnostic)",
+            zorder=2,
+        )
+        panel_a.set_title("A  Fidelity by decoder depth", loc="left")
+
+        gap_point: np.ndarray = data.series[_column(_GAP, _TARGET_POINT_SUFFIX)]
+        panel_b.fill_between(
+            data.relative_depth,
+            data.series[_column(_GAP, _TARGET_LOWER_SUFFIX)],
+            data.series[_column(_GAP, _TARGET_UPPER_SUFFIX)],
+            color=_COLOR_CONTROL,
+            alpha=0.18,
+            linewidth=0.0,
+            label="95% paired prompt-bootstrap CI",
+            zorder=1,
+        )
+        panel_b.fill_between(
+            data.relative_depth,
+            0.0,
+            gap_point,
+            where=gap_point >= 0.0,
+            color=_COLOR_PRED,
+            alpha=0.20,
+            linewidth=0.0,
+            zorder=2,
+        )
+        panel_b.fill_between(
+            data.relative_depth,
+            0.0,
+            gap_point,
+            where=gap_point < 0.0,
+            color=_COLOR_ATTR,
+            alpha=0.20,
+            linewidth=0.0,
+            zorder=2,
+        )
+        positive_gap: np.ndarray = np.where(gap_point >= 0.0, gap_point, np.nan)
+        negative_gap: np.ndarray = np.where(gap_point <= 0.0, gap_point, np.nan)
+        panel_b.plot(
+            data.relative_depth,
+            positive_gap,
+            color=_COLOR_PRED,
+            linewidth=2.1,
+            label="Prediction-dominant gap",
+            zorder=3,
         )
         panel_b.plot(
             data.relative_depth,
-            data.series[_column(_SHUFFLED_GROUPED_CONTROL, _CONTROL_MEDIAN_SUFFIX)],
-            color="#4D4D4D",
-            linestyle=":",
-            linewidth=1.6,
-            label="Shuffled signed grouped controls (assignment median)",
-            zorder=2,
+            negative_gap,
+            color=_COLOR_ATTR,
+            linewidth=2.1,
+            label="Attribution-dominant gap",
+            zorder=3,
         )
-        panel_b.set_title(
-            "B  Signed attribution fidelity and matched controls", loc="left"
-        )
+        panel_b.axhline(0.0, color=_COLOR_CONTROL, linewidth=0.9, zorder=0)
+        panel_b.set_title("B  Prediction–attribution gap", loc="left")
 
         for axis in axes:
             axis.set_xlim(0.0, 1.0)
-            axis.set_ylim(0.0, 1.0)
             axis.set_xlabel("Relative decoder depth")
             axis.grid(axis="y", color="#D9D9D9", linewidth=0.6, zorder=0)
             axis.legend(loc="best", frameon=False)
+        panel_a.set_ylim(0.0, 1.0)
         panel_a.set_ylabel("Mean pairwise Pearson R²")
+        gap_extent: float = max(
+            0.2,
+            float(
+                np.max(
+                    np.abs(
+                        np.concatenate(
+                            [
+                                data.series[_column(_GAP, _TARGET_LOWER_SUFFIX)],
+                                data.series[_column(_GAP, _TARGET_UPPER_SUFFIX)],
+                            ]
+                        )
+                    )
+                )
+            ),
+        )
+        gap_limit: float = min(1.0, np.ceil(gap_extent * 20.0) / 20.0)
+        panel_b.set_ylim(-gap_limit, gap_limit)
+        panel_b.set_ylabel(r"Mean pairwise $R^2$ gap")
 
         scope_label: str = {
             "all": "all dialog segments",
@@ -448,9 +557,11 @@ def plot_summary(summary_path: str, output_path: str) -> None:
         figure.text(
             0.5,
             0.015,
-            "Target ribbons are 95% prompt-cluster bootstrap CIs. Attribution control "
-            "bands are empirical direction ranges, not confidence intervals. "
-            "Pair-averaged R² curves are not additive explained variance.",
+            "Target and gap ribbons are pointwise 95% prompt-cluster bootstrap CIs. "
+            "Control bands are empirical readout ranges, not confidence intervals. "
+            "Grouped 9-vs-8 and the permutation null target headline attribution; "
+            "isotropic targets the plotted single-token diagnostic. Pair-averaged "
+            "R² is not additive.",
             ha="center",
             va="bottom",
             fontsize=7.5,

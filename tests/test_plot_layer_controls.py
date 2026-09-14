@@ -44,6 +44,9 @@ def _summary_frame(depth_count: int = 5) -> pd.DataFrame:
             else:
                 value = 0.30 + depth * 0.10
             row[column] = value
+        row["grouped_logsumexp_prediction_mean_pair_pearson_r2"] = 0.60 + depth * 0.10
+        row["grouped_logsumexp_attribution_mean_pair_pearson_r2"] = 0.30 + depth * 0.10
+        row["prediction_minus_attribution_gap_mean_pair_pearson_r2"] = 0.30
         rows.append(row)
     depth_mean: dict[str, Any] = dict(rows[-1])
     depth_mean["summary_kind"] = "equal_weight_depth_mean"
@@ -81,6 +84,9 @@ class _FakeAxis:
 
     def set_ylabel(self, *_args: Any) -> None:
         pass
+
+    def axhline(self, *_args: Any, **_kwargs: Any) -> object:
+        return object()
 
     def grid(self, **_kwargs: Any) -> None:
         pass
@@ -179,6 +185,17 @@ class PlotLayerControlsTest(TestCase):
             with self.assertRaisesRegex(ValueError, "embedding policy disagree"):
                 plotter.load_plot_data(alignment_path)
 
+    def test_rejects_gap_inconsistent_with_target_curves(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            invalid: pd.DataFrame = _summary_frame()
+            invalid.loc[
+                invalid["summary_kind"] == "relative_depth",
+                "prediction_minus_attribution_gap_mean_pair_pearson_r2",
+            ] += 0.01
+            path: str = self._write_summary(directory, invalid)
+            with self.assertRaisesRegex(ValueError, "gap does not equal"):
+                plotter.load_plot_data(path)
+
     def test_plot_labels_uncertainty_types_and_writes_atomically(self) -> None:
         fake_pyplot: _FakePyplot = _FakePyplot()
         with tempfile.TemporaryDirectory() as directory:
@@ -193,33 +210,43 @@ class PlotLayerControlsTest(TestCase):
         panel_a_band_labels: set[str] = {
             call["label"] for call in fake_pyplot.axes[0].bands
         }
-        self.assertEqual(panel_a_labels, {r"Grouped-logsumexp $F_{\mathrm{pred}}$"})
+        self.assertEqual(
+            panel_a_labels,
+            {
+                r"$F_{\mathrm{pred}}$",
+                r"Signed $F_{\mathrm{attr}}$",
+                "Single-token attribution diagnostic",
+                "Readout-compatible controls (median)",
+                "Observation-pair permutation",
+                "Independent isotropic (single-token diagnostic)",
+            },
+        )
         self.assertEqual(
             panel_a_band_labels,
-            {r"$F_{\mathrm{pred}}$: 95% prompt-bootstrap CI"},
+            {
+                r"$F_{\mathrm{pred}}$: 95% prompt-bootstrap CI",
+                r"$F_{\mathrm{attr}}$: 95% prompt-bootstrap CI",
+                "Controls: empirical 2.5–97.5% readout range",
+            },
         )
 
         panel_b_labels: set[str] = {call["label"] for call in fake_pyplot.axes[1].plots}
         panel_b_band_labels: set[str] = {
-            call["label"] for call in fake_pyplot.axes[1].bands
+            call["label"] for call in fake_pyplot.axes[1].bands if "label" in call
         }
-        self.assertIn(r"Signed grouped-logsumexp $F_{\mathrm{attr}}$", panel_b_labels)
-        self.assertIn("Signed grouped 9-vs-8 controls (median)", panel_b_labels)
-        self.assertIn(
-            "Shuffled signed grouped controls (assignment median)", panel_b_labels
+        self.assertEqual(
+            panel_b_labels,
+            {"Prediction-dominant gap", "Attribution-dominant gap"},
         )
-        self.assertIn(
-            r"$F_{\mathrm{attr}}$: 95% prompt-bootstrap CI", panel_b_band_labels
+        self.assertEqual(
+            panel_b_band_labels,
+            {"95% paired prompt-bootstrap CI"},
         )
-        self.assertIn(
-            "Controls: empirical 2.5–97.5% direction range", panel_b_band_labels
-        )
-        self.assertEqual(len(panel_b_labels), 3)
         self.assertIn(
             "6 aligned decoder depths; embedding excluded",
             fake_pyplot.figure.suptitle_text,
         )
-        self.assertIn("not additive explained variance", fake_pyplot.figure.footer_text)
+        self.assertIn("not additive", fake_pyplot.figure.footer_text)
         self.assertEqual(
             fake_pyplot.figure.saved_metadata["Software"],
             "benchmark_scripts.plot_layer_controls",

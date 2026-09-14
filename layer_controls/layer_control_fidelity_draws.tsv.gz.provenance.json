@@ -3,7 +3,7 @@
   "generator": {
     "module": "benchmark_scripts.analyze_layer_controls",
     "provenance_writer_sha256": "a61dc3d512acf567d255528ad56a6a95d81d9dec9047b4d00f07589da94ba50b",
-    "source_sha256": "dc8f56ef4b9ed8e58dabf19959b83d56b068b2d59aab9d5e8cbd6213b9255283"
+    "source_sha256": "f4c688e929b54c9fbdaab7b8996f4394fc0cf1b381704ae10181bf35e3385ade"
   },
   "inputs": {
     "boolq/sentence/control_spec": {
@@ -119,8 +119,8 @@
   },
   "output": {
     "path": "layer_control_fidelity_draws.tsv.gz",
-    "sha256": "858441d700743c0cabbd51fae8378aa6cb59e7a4e5e85b07c276eadbbfb99ca6",
-    "size_bytes": 12012928
+    "sha256": "835a5cf0e9de03bf9f08583e8fb0a0b26aa7a78843d37721124b95189d6ffde8",
+    "size_bytes": 12670944
   },
   "parameters": {
     "artifact_detail": "draw_level_diagnostic",
@@ -134,6 +134,7 @@
     "control_comparison_target": {
       "grouped_9v8_pseudo_label": "grouped_logsumexp_attribution",
       "independent_isotropic": "single_token_true_false_attribution_diagnostic",
+      "observation_pair_permutation": "grouped_logsumexp_attribution",
       "shared_single_token_pair": "single_token_true_false_attribution_diagnostic",
       "shuffled_grouped_9v8_pseudo_label": "grouped_logsumexp_attribution",
       "shuffled_shared_single_token_pair": "single_token_true_false_attribution_diagnostic"
@@ -143,11 +144,18 @@
       "shuffled_shared_single_token_pair",
       "grouped_9v8_pseudo_label",
       "shuffled_grouped_9v8_pseudo_label",
-      "independent_isotropic"
+      "independent_isotropic",
+      "observation_pair_permutation"
     ],
     "depth_alignment": "linear_interpolation_block_outputs_only",
     "depth_grid_size": 64,
     "depth_mean_definition": "arithmetic_mean_of_pointwise_pair_mean_r_squared_over_equally_spaced_relative_depth_grid",
+    "derived_curves": {
+      "prediction_minus_attribution_gap": {
+        "bootstrap": "paired_shared_prompt_resamples",
+        "definition": "grouped_logsumexp_prediction_minus_grouped_logsumexp_attribution"
+      }
+    },
     "embedding_slot_included": false,
     "models": [
       "qwen2.5-0.5b-instruct",
@@ -157,6 +165,13 @@
       "qwen2.5-14b-instruct"
     ],
     "num_control_draws": 256,
+    "observation_permutation": {
+      "draws": 64,
+      "draws_shared_across_depths_and_model_pairs": true,
+      "seed": 1329746810,
+      "target": "grouped_logsumexp_attribution",
+      "unit": "flat_prompt_segment_coordinate"
+    },
     "pregrouper": "sentence",
     "r_squared_aggregation_interpretation": "descriptive_pair_average_not_additive_explained_variance",
     "randomization_inference": "descriptive_only_no_p_values",

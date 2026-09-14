@@ -22,6 +22,24 @@ pip install -e ".[dev]"
 pytest tests/
 ```
 
+## Reproduce the paper figures
+
+[`notebooks/paper_figures.ipynb`](notebooks/paper_figures.ipynb) regenerates
+the revised paper's public-data tables and figures from the committed result
+artifacts. It uses the canonical user-segment, pairwise-complete analysis,
+including entailment-minus-contradiction for ANLI and multivariate RV for
+RACE. The per-layer figure reports unnormalized `F_pred`, signed `F_attr`,
+their paired-bootstrap gap, and the released readout controls.
+
+```bash
+pip install -e ".[paper]"
+jupyter lab notebooks/paper_figures.ipynb
+```
+
+Outputs are written under `paper_outputs/` by default. Set
+`SURROGATE_PAPER_OUTPUT_DIR` to write into a paper source tree. Analyses that
+require unreleased hidden states, such as CKA, are intentionally excluded.
+
 ## Method
 
 The release uses these primary choices:
@@ -184,7 +202,9 @@ The grouped 9-vs-8 pseudo-label controls match the cardinality and tokenizer
 acceptance profile of the BoolQ label groups. Selection depends only on the
 tokenizers—not the corpus, activations, or model scores. Cross-model shuffled
 assignments break direction identity while preserving each model's marginal
-control distribution.
+control distribution. A separately derived observation-pair permutation null
+breaks `(prompt_idx, seg_idx)` correspondence while preserving each model's
+attribution distribution.
 
 The raw projection tensors total roughly 15 GB and are intentionally kept
 outside Git. Generate them into a separate directory, then commit only the
@@ -222,13 +242,14 @@ python -m benchmark_scripts.plot_layer_controls \
     layer_controls/layer_control_fidelity.pdf
 ```
 
-The headline plot reports per-layer grouped-logsumexp `F_pred` and signed
-`F_attr`. Target ribbons are 95% prompt-cluster bootstrap intervals; control
-ribbons are empirical ranges across directions and are not confidence
-intervals. Pairwise R² values are averaged over the ten open-model pairs and
-must not be interpreted additively. Relative depth excludes the embedding slot
-by default; `analyze_layer_controls --include-embedding` provides an explicit
-all-slot sensitivity.
+The headline plot reports per-layer grouped-logsumexp `F_pred`, signed
+`F_attr`, and their paired-bootstrap difference. Target and gap ribbons are
+95% prompt-cluster bootstrap intervals; control ribbons are empirical ranges
+across directions and are not confidence intervals. Pairwise R² values are
+averaged over the ten open-model pairs and must not be interpreted additively.
+Relative depth excludes the embedding slot by default;
+`analyze_layer_controls --include-embedding` provides an explicit all-slot
+sensitivity.
 
 `F_pred` is prompt-level and therefore uses the full dialog. Other metrics use
 the requested segment coordinates. For ANLI E-C, `F_align` and

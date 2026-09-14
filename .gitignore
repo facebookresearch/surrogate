@@ -9,6 +9,7 @@ build/
 *.egg
 .pytest_cache/
 .mypy_cache/
+paper_outputs/
 
 **/*_consolidated.tsv
 

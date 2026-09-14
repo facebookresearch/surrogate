@@ -318,6 +318,29 @@ class NumericalControlTest(unittest.TestCase):
             expected.append(float(np.mean(pair)))
         self.assertAlmostEqual(shuffled[0], float(np.mean(expected)))
 
+    def test_observation_permutation_breaks_row_pairing(self) -> None:
+        signals: list[np.ndarray] = [
+            np.array([1.0, 2.0, 4.0, 8.0]),
+            np.array([2.0, 3.0, 7.0, 9.0]),
+            np.array([-1.0, 5.0, 6.0, 10.0]),
+        ]
+        permutations: np.ndarray = np.array(
+            [[3, 2, 1, 0], [1, 3, 0, 2]], dtype=np.int32
+        )
+        observed: np.ndarray = analyzer._observation_permutation_pair_r2(
+            signals, permutations
+        )
+        expected: np.ndarray = np.stack(
+            [
+                [
+                    analyzer._pearson_r2(first, second[permutation])
+                    for permutation in permutations
+                ]
+                for first, second in itertools.combinations(signals, 2)
+            ]
+        )
+        np.testing.assert_allclose(observed, expected)
+
     def test_prompt_bootstrap_is_deterministic_and_clustered(self) -> None:
         prompts: np.ndarray = np.array([0, 0, 1, 1, 2, 2])
         codes_a, weights_a = analyzer._bootstrap_prompt_weights(prompts, 20, 17)
@@ -335,6 +358,26 @@ class NumericalControlTest(unittest.TestCase):
         )
         self.assertAlmostEqual(statistics["mean_pair_pearson_r2"], 1.0)
         np.testing.assert_allclose(bootstrap, np.ones(20))
+
+    def test_gap_interval_preserves_paired_bootstrap_resamples(self) -> None:
+        prediction: np.ndarray = np.array([0.8, 0.6, 0.7, 0.9])
+        attribution: np.ndarray = np.array([0.5, 0.4, 0.6, 0.3])
+        statistics: dict[str, float] = analyzer._paired_difference_statistics(
+            0.75,
+            0.45,
+            prediction,
+            attribution,
+            0.5,
+        )
+        difference: np.ndarray = prediction - attribution
+        self.assertAlmostEqual(statistics["mean_pair_pearson_r2"], 0.30)
+        self.assertAlmostEqual(statistics["bootstrap_mean"], float(difference.mean()))
+        self.assertAlmostEqual(
+            statistics["bootstrap_lower"], float(np.quantile(difference, 0.25))
+        )
+        self.assertAlmostEqual(
+            statistics["bootstrap_upper"], float(np.quantile(difference, 0.75))
+        )
 
 
 class SidecarValidationTest(unittest.TestCase):
@@ -689,7 +732,7 @@ class EndToEndAnalysisTest(unittest.TestCase):
         self.assertEqual(
             len(draws),
             4
-            * len(analyzer.CONTROL_FAMILIES)
+            * len(analyzer.ANALYSIS_CONTROL_FAMILIES)
             * num_draws
             * (1 + len(list(itertools.combinations(OPEN_MODELS, 2)))),
         )
@@ -705,6 +748,18 @@ class EndToEndAnalysisTest(unittest.TestCase):
             self.assertAlmostEqual(
                 float(depth_mean[column]), float(depth_rows[column].mean())
             )
+        gap_column: str = f"{analyzer.GAP_CURVE}_mean_pair_pearson_r2"
+        prediction_column: str = "grouped_logsumexp_prediction_mean_pair_pearson_r2"
+        attribution_column: str = "grouped_logsumexp_attribution_mean_pair_pearson_r2"
+        self.assertTrue(
+            np.allclose(
+                depth_rows[gap_column],
+                depth_rows[prediction_column] - depth_rows[attribution_column],
+            )
+        )
+        self.assertAlmostEqual(
+            float(depth_mean[gap_column]), float(depth_rows[gap_column].mean())
+        )
         endpoint: pd.Series = depth_rows[depth_rows["relative_depth"] == 1.0].iloc[0]
         prediction_endpoint: list[np.ndarray] = [
             predictions[model][:, -1] for model in OPEN_MODELS

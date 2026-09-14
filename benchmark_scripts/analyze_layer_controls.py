@@ -52,6 +52,7 @@ DEFAULT_DEPTH_GRID_SIZE: int = 64
 DEFAULT_BOOTSTRAP_RESAMPLES: int = 1000
 DEFAULT_CONFIDENCE_LEVEL: float = 0.95
 DEFAULT_SEED: int = 42
+DEFAULT_OBSERVATION_PERMUTATION_DRAWS: int = 64
 SHA256_PATTERN: re.Pattern[str] = re.compile(r"[0-9a-f]{64}")
 
 # This inventory is intentionally local to the control producer.  Adding it to
@@ -78,18 +79,25 @@ CONTROL_FAMILIES: tuple[str, ...] = (
     "shuffled_grouped_9v8_pseudo_label",
     "independent_isotropic",
 )
+OBSERVATION_PERMUTATION: str = "observation_pair_permutation"
+ANALYSIS_CONTROL_FAMILIES: tuple[str, ...] = (
+    *CONTROL_FAMILIES,
+    OBSERVATION_PERMUTATION,
+)
 TARGET_CURVES: tuple[str, ...] = (
     "grouped_logsumexp_prediction",
     "grouped_logsumexp_attribution",
     "single_token_true_false_attribution_diagnostic",
     "grouped_alias_linear_projection_diagnostic",
 )
+GAP_CURVE: str = "prediction_minus_attribution_gap"
 CONTROL_COMPARISON_TARGET: dict[str, str] = {
     "shared_single_token_pair": TARGET_CURVES[2],
     "shuffled_shared_single_token_pair": TARGET_CURVES[2],
     "grouped_9v8_pseudo_label": TARGET_CURVES[1],
     "shuffled_grouped_9v8_pseudo_label": TARGET_CURVES[1],
     "independent_isotropic": TARGET_CURVES[2],
+    OBSERVATION_PERMUTATION: TARGET_CURVES[1],
 }
 
 
@@ -844,6 +852,29 @@ def _control_draw_pair_r2(signals: Sequence[np.ndarray]) -> np.ndarray:
     )
 
 
+def _observation_permutation_pair_r2(
+    signals: Sequence[np.ndarray], permutations: np.ndarray
+) -> np.ndarray:
+    """Return pair scores after breaking shared observation coordinates."""
+    if len(signals) < 2:
+        raise ValueError("at least two model signals are required")
+    if permutations.ndim != 2 or permutations.shape[1] != len(signals[0]):
+        raise ValueError("observation permutations disagree with signal rows")
+    if permutations.min() < 0 or permutations.max() >= permutations.shape[1]:
+        raise ValueError("observation permutation contains an invalid row index")
+    centered: list[np.ndarray] = [signal - signal.mean() for signal in signals]
+    norms: list[float] = [float(np.linalg.norm(signal)) for signal in centered]
+    if any(norm <= 0.0 or not np.isfinite(norm) for norm in norms):
+        raise ValueError("observation permutation signal is constant or non-finite")
+    output: np.ndarray = np.empty(
+        (math.comb(len(signals), 2), len(permutations)), dtype=np.float64
+    )
+    for pair_index, (first, second) in enumerate(combinations(range(len(signals)), 2)):
+        covariance: np.ndarray = centered[second][permutations] @ centered[first]
+        output[pair_index] = np.square(covariance / (norms[first] * norms[second]))
+    return np.clip(output, 0.0, 1.0)
+
+
 def _control_draw_mean_pair_r2(signals: Sequence[np.ndarray]) -> np.ndarray:
     return np.mean(_control_draw_pair_r2(signals), axis=0)
 
@@ -1032,6 +1063,29 @@ def _target_statistics(
     )
 
 
+def _paired_difference_statistics(
+    first_point: float,
+    second_point: float,
+    first_bootstrap: np.ndarray,
+    second_bootstrap: np.ndarray,
+    confidence_level: float,
+) -> dict[str, float]:
+    """Summarize a paired difference using shared bootstrap resamples."""
+    if first_bootstrap.shape != second_bootstrap.shape:
+        raise ValueError("paired bootstrap vectors must have the same shape")
+    difference: np.ndarray = first_bootstrap - second_bootstrap
+    if difference.ndim != 1 or not np.isfinite(difference).all():
+        raise ValueError("paired bootstrap difference must be a finite vector")
+    alpha: float = (1.0 - confidence_level) / 2.0
+    return {
+        "mean_pair_pearson_r2": first_point - second_point,
+        "bootstrap_mean": float(np.mean(difference)),
+        "bootstrap_median": float(np.median(difference)),
+        "bootstrap_lower": float(np.quantile(difference, alpha)),
+        "bootstrap_upper": float(np.quantile(difference, 1.0 - alpha)),
+    }
+
+
 def _randomization_statistics(values: np.ndarray) -> dict[str, float]:
     if values.ndim != 1 or len(values) == 0 or not np.isfinite(values).all():
         raise ValueError("randomization values must be a nonempty finite vector")
@@ -1058,9 +1112,12 @@ def _control_draw_rows(
     """Return pair-level and pair-averaged rows for one control family."""
     if pair_values.ndim != 2 or pair_values.shape[0] != len(model_pairs):
         raise ValueError("control pair-value shape disagrees with model pairs")
-    randomization_unit: str = (
-        "permutation_assignment" if family.startswith("shuffled_") else "control_draw"
-    )
+    if family == OBSERVATION_PERMUTATION:
+        randomization_unit: str = "observation_pair_permutation"
+    elif family.startswith("shuffled_"):
+        randomization_unit = "permutation_assignment"
+    else:
+        randomization_unit = "control_draw"
     rows: list[dict[str, Any]] = []
     mean_values: np.ndarray = np.mean(pair_values, axis=0)
     for randomization_idx, value in enumerate(mean_values):
@@ -1257,13 +1314,23 @@ def analyze(
         target: [] for target in TARGET_CURVES
     }
     control_draws_by_depth: dict[str, list[np.ndarray]] = {
-        family: [] for family in CONTROL_FAMILIES
+        family: [] for family in ANALYSIS_CONTROL_FAMILIES
     }
     control_pair_draws_by_depth: dict[str, list[np.ndarray]] = {
-        family: [] for family in CONTROL_FAMILIES
+        family: [] for family in ANALYSIS_CONTROL_FAMILIES
     }
     model_pairs: list[tuple[str, str]] = list(combinations(OPEN_MODELS, 2))
     prediction_row_indices: np.ndarray = np.arange(len(prediction_prompts), dtype=int)
+    observation_draws: int = min(num_draws, DEFAULT_OBSERVATION_PERMUTATION_DRAWS)
+    observation_seed: int = seed ^ 0x4F425350
+    observation_rng: np.random.Generator = np.random.default_rng(observation_seed)
+    observation_permutations: np.ndarray = np.stack(
+        [
+            observation_rng.permutation(len(row_indices))
+            for _ in range(observation_draws)
+        ],
+        axis=0,
+    ).astype(np.int32)
     for depth_index, depth_value in enumerate(np.linspace(0.0, 1.0, depth_grid_size)):
         depth: float = float(depth_value)
         prediction_signals: list[np.ndarray] = [
@@ -1328,6 +1395,7 @@ def analyze(
             "f_pred_n_observations": len(prediction_prompts),
             "f_attr_n_observations": len(row_indices),
             "num_control_draws": num_draws,
+            "num_observation_permutations": observation_draws,
         }
         for target_name, signals in target_signals.items():
             target_prompt_codes: np.ndarray = (
@@ -1347,6 +1415,16 @@ def analyze(
             target_bootstrap_by_depth[target_name].append(bootstrap_values)
             for statistic, value in statistics.items():
                 row[f"{target_name}_{statistic}"] = value
+
+        gap_statistics: dict[str, float] = _paired_difference_statistics(
+            target_points_by_depth[TARGET_CURVES[0]][-1],
+            target_points_by_depth[TARGET_CURVES[1]][-1],
+            target_bootstrap_by_depth[TARGET_CURVES[0]][-1],
+            target_bootstrap_by_depth[TARGET_CURVES[1]][-1],
+            confidence_level,
+        )
+        for statistic, value in gap_statistics.items():
+            row[f"{GAP_CURVE}_{statistic}"] = value
 
         shared_signed_matrices: list[np.ndarray] = [
             _interpolate_at_depth(
@@ -1395,15 +1473,23 @@ def analyze(
             isotropic_signed_matrices
         )
         del isotropic_signed_matrices
-        for family in CONTROL_FAMILIES:
+        family_pair_draws[OBSERVATION_PERMUTATION] = _observation_permutation_pair_r2(
+            grouped_logsumexp_signals, observation_permutations
+        )
+        for family in ANALYSIS_CONTROL_FAMILIES:
             pair_draws: np.ndarray = family_pair_draws[family]
             draws: np.ndarray = np.mean(pair_draws, axis=0)
             row[f"{family}_comparison_target"] = CONTROL_COMPARISON_TARGET[family]
-            row[f"{family}_randomization_unit"] = (
-                "permutation_assignment_mean_over_draws_and_pairs"
-                if family.startswith("shuffled_")
-                else "control_draw_mean_over_pairs"
-            )
+            if family == OBSERVATION_PERMUTATION:
+                row[f"{family}_randomization_unit"] = (
+                    "observation_pair_permutation_mean_over_pairs"
+                )
+            elif family.startswith("shuffled_"):
+                row[f"{family}_randomization_unit"] = (
+                    "permutation_assignment_mean_over_draws_and_pairs"
+                )
+            else:
+                row[f"{family}_randomization_unit"] = "control_draw_mean_over_pairs"
             control_draws_by_depth[family].append(draws)
             control_pair_draws_by_depth[family].append(pair_draws)
             for statistic, value in _randomization_statistics(draws).items():
@@ -1446,6 +1532,7 @@ def analyze(
         "f_pred_n_observations": len(prediction_prompts),
         "f_attr_n_observations": len(row_indices),
         "num_control_draws": num_draws,
+        "num_observation_permutations": observation_draws,
     }
     alpha: float = (1.0 - confidence_level) / 2.0
     for target_name in TARGET_CURVES:
@@ -1462,7 +1549,16 @@ def analyze(
         }
         for statistic, value in depth_mean_statistics.items():
             depth_mean_row[f"{target_name}_{statistic}"] = value
-    for family in CONTROL_FAMILIES:
+    gap_depth_mean_statistics: dict[str, float] = _paired_difference_statistics(
+        float(np.mean(target_points_by_depth[TARGET_CURVES[0]])),
+        float(np.mean(target_points_by_depth[TARGET_CURVES[1]])),
+        np.mean(np.stack(target_bootstrap_by_depth[TARGET_CURVES[0]], axis=0), axis=0),
+        np.mean(np.stack(target_bootstrap_by_depth[TARGET_CURVES[1]], axis=0), axis=0),
+        confidence_level,
+    )
+    for statistic, value in gap_depth_mean_statistics.items():
+        depth_mean_row[f"{GAP_CURVE}_{statistic}"] = value
+    for family in ANALYSIS_CONTROL_FAMILIES:
         draw_depth_mean: np.ndarray = np.mean(
             np.stack(control_draws_by_depth[family], axis=0), axis=0
         )
@@ -1474,11 +1570,18 @@ def analyze(
         depth_mean_row[f"{family}_comparison_target"] = CONTROL_COMPARISON_TARGET[
             family
         ]
-        depth_mean_row[f"{family}_randomization_unit"] = (
-            "permutation_assignment_mean_over_draws_and_pairs"
-            if family.startswith("shuffled_")
-            else "control_draw_mean_over_pairs"
-        )
+        if family == OBSERVATION_PERMUTATION:
+            depth_mean_row[f"{family}_randomization_unit"] = (
+                "observation_pair_permutation_mean_over_pairs"
+            )
+        elif family.startswith("shuffled_"):
+            depth_mean_row[f"{family}_randomization_unit"] = (
+                "permutation_assignment_mean_over_draws_and_pairs"
+            )
+        else:
+            depth_mean_row[f"{family}_randomization_unit"] = (
+                "control_draw_mean_over_pairs"
+            )
         draw_rows.extend(
             _control_draw_rows(
                 summary_kind="equal_weight_depth_mean",
@@ -1563,7 +1666,14 @@ def main() -> None:
         "shuffle_assignments": len(permutation_records),
         "shuffle_assignment_rng": "sha256_seeded_numpy_default_rng_per_model_v1",
         "shuffle_assignment_records": permutation_records,
-        "control_families": list(CONTROL_FAMILIES),
+        "control_families": list(ANALYSIS_CONTROL_FAMILIES),
+        "observation_permutation": {
+            "target": TARGET_CURVES[1],
+            "unit": "flat_prompt_segment_coordinate",
+            "draws": min(num_draws, DEFAULT_OBSERVATION_PERMUTATION_DRAWS),
+            "draws_shared_across_depths_and_model_pairs": True,
+            "seed": args.seed ^ 0x4F425350,
+        },
         "target_curves": list(TARGET_CURVES),
         "control_comparison_target": CONTROL_COMPARISON_TARGET,
         "target_roles": {
@@ -1571,6 +1681,12 @@ def main() -> None:
             TARGET_CURVES[1]: "primary_attribution_fidelity_target",
             TARGET_CURVES[2]: "single_token_linear_attribution_diagnostic",
             TARGET_CURVES[3]: "grouped_alias_linear_attribution_diagnostic",
+        },
+        "derived_curves": {
+            GAP_CURVE: {
+                "definition": f"{TARGET_CURVES[0]}_minus_{TARGET_CURVES[1]}",
+                "bootstrap": "paired_shared_prompt_resamples",
+            }
         },
         "attribution_sign_convention": "interpolate_signed_then_correlate",
         "statistic": "mean_over_model_pairs_of_pearson_r_squared",
