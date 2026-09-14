@@ -60,6 +60,10 @@ f_table             -> results/f_table.tsv
 race_rv             -> results/race_rv.tsv
 run_layerwise       -> results/{benchmark}/{pregrouper}/{model}_layers.tsv.gz
 layerwise_fidelity  -> results/layerwise_fidelity.tsv
+build_layer_control_spec -> layer_controls/layer_control_spec.json
+run_layer_controls  -> external per-model projection tensors
+analyze_layer_controls -> layer_controls/layer_control_fidelity.tsv
+plot_layer_controls -> layer_controls/layer_control_fidelity.pdf
 ```
 
 ### 1. Generate open-model outputs
@@ -173,6 +177,58 @@ python -m benchmark_scripts.layerwise_fidelity \
     --depth-alignment nearest_native \
     --output results/layerwise_fidelity_nearest_sensitivity.tsv
 ```
+
+The BoolQ layer-control analysis uses 256 deterministic directions shared by
+all five open-model tokenizers, plus independently seeded isotropic directions.
+The grouped 9-vs-8 pseudo-label controls match the cardinality and tokenizer
+acceptance profile of the BoolQ label groups. Selection depends only on the
+tokenizers—not the corpus, activations, or model scores. Cross-model shuffled
+assignments break direction identity while preserving each model's marginal
+control distribution.
+
+The raw projection tensors total roughly 15 GB and are intentionally kept
+outside Git. Generate them into a separate directory, then commit only the
+compact summary, compressed pair-level draw table, specification, and plot:
+
+```bash
+python -m benchmark_scripts.build_layer_control_spec \
+    --model-root /path/to/models \
+    --output layer_controls/layer_control_spec.json
+
+python -m benchmark_scripts.run_layer_controls \
+    --control-spec layer_controls/layer_control_spec.json \
+    --source-results-dir results \
+    --output-dir /path/to/layer-controls \
+    --model-set Qwen2.5-Instruct \
+    --dataset-file /path/to/google_boolq_validation.tsv
+
+python -m benchmark_scripts.run_layer_controls \
+    --control-spec layer_controls/layer_control_spec.json \
+    --source-results-dir results \
+    --output-dir /path/to/layer-controls \
+    --model-set Llama3.1-Instruct \
+    --dataset-file /path/to/google_boolq_validation.tsv
+
+python -m benchmark_scripts.analyze_layer_controls \
+    --source-results-dir results \
+    --control-results-dir /path/to/layer-controls \
+    --control-spec layer_controls/layer_control_spec.json \
+    --output layer_controls/layer_control_fidelity.tsv \
+    --draw-output layer_controls/layer_control_fidelity_draws.tsv.gz
+
+pip install -e ".[plots]"
+python -m benchmark_scripts.plot_layer_controls \
+    layer_controls/layer_control_fidelity.tsv \
+    layer_controls/layer_control_fidelity.pdf
+```
+
+The headline plot reports per-layer grouped-logsumexp `F_pred` and signed
+`F_attr`. Target ribbons are 95% prompt-cluster bootstrap intervals; control
+ribbons are empirical ranges across directions and are not confidence
+intervals. Pairwise R² values are averaged over the ten open-model pairs and
+must not be interpreted additively. Relative depth excludes the embedding slot
+by default; `analyze_layer_controls --include-embedding` provides an explicit
+all-slot sensitivity.
 
 `F_pred` is prompt-level and therefore uses the full dialog. Other metrics use
 the requested segment coordinates. For ANLI E-C, `F_align` and
