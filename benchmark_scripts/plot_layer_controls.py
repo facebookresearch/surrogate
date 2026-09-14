@@ -5,11 +5,12 @@
 
 # pyre-strict
 
-"""Plot the compact BoolQ layer-control summary.
+"""Plot the compact BoolQ layer-control summary for an ICLR wrapfigure.
 
 The observed-target ribbons are prompt-cluster bootstrap confidence intervals.
-The control ribbons instead show empirical variation over sampled directions;
-they are deliberately labeled differently in the figure.
+The control ribbon instead shows empirical variation over sampled compatible
+readouts. The plot deliberately contains only the two headline fidelities and
+their closest readout-compatible null.
 """
 
 from __future__ import annotations
@@ -370,7 +371,7 @@ def _save_figure(figure: Any, output_path: str, output_format: str) -> None:
 
 
 def plot_summary(summary_path: str, output_path: str) -> None:
-    """Render a deterministic two-panel layer-control figure.
+    """Render a deterministic half-width layer-control figure.
 
     Args:
         summary_path: Analyzer-produced compact summary TSV.
@@ -387,25 +388,26 @@ def plot_summary(summary_path: str, output_path: str) -> None:
     pyplot: Any = _load_pyplot()
 
     style: dict[str, Any] = {
-        "font.family": "DejaVu Sans",
-        "font.size": 8.5,
-        "axes.titlesize": 10,
-        "axes.labelsize": 9,
-        "legend.fontsize": 7,
-        "xtick.labelsize": 8,
-        "ytick.labelsize": 8,
+        "font.family": "serif",
+        "font.serif": ["Nimbus Roman", "Times New Roman", "Times", "STIXGeneral"],
+        "mathtext.fontset": "stix",
+        "font.size": 8.0,
+        "axes.labelsize": 8.0,
+        "xtick.labelsize": 7.0,
+        "ytick.labelsize": 7.0,
         "axes.spines.top": False,
         "axes.spines.right": False,
+        "axes.grid": False,
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
     }
     with pyplot.rc_context(style):
-        figure, axes = pyplot.subplots(1, 2, figsize=(11.2, 4.5))
-        panel_a: Any = axes[0]
-        panel_b: Any = axes[1]
+        # ICLR uses a 5.5-inch single-column text block. The paper currently
+        # places this plot in a 0.5\textwidth wrapfigure.
+        figure, axis = pyplot.subplots(figsize=(2.75, 2.15))
 
         _plot_target(
-            panel_a,
+            axis,
             data,
             _PREDICTION,
             color=_COLOR_PRED,
@@ -413,162 +415,62 @@ def plot_summary(summary_path: str, output_path: str) -> None:
             ribbon_label=r"$F_{\mathrm{pred}}$: 95% prompt-bootstrap CI",
         )
         _plot_target(
-            panel_a,
+            axis,
             data,
             _ATTRIBUTION,
             color=_COLOR_ATTR,
-            line_label=r"Signed $F_{\mathrm{attr}}$",
+            line_label=r"$F_{\mathrm{attr}}$",
             ribbon_label=r"$F_{\mathrm{attr}}$: 95% prompt-bootstrap CI",
         )
-        panel_a.plot(
-            data.relative_depth,
-            data.series[_column(_SINGLE_TOKEN_ATTRIBUTION, _TARGET_POINT_SUFFIX)],
-            color=_COLOR_ATTR,
-            linestyle="--",
-            linewidth=1.4,
-            alpha=0.72,
-            label="Single-token attribution diagnostic",
-            zorder=2,
-        )
         _plot_control_band(
-            panel_a,
+            axis,
             data,
             _GROUPED_CONTROL,
             color=_COLOR_CONTROL,
-            line_label="Readout-compatible controls (median)",
-            ribbon_label="Controls: empirical 2.5–97.5% readout range",
+            line_label="Control",
+            ribbon_label="Control: empirical 2.5–97.5% readout interval",
         )
-        panel_a.plot(
-            data.relative_depth,
-            data.series[_column(_OBSERVATION_CONTROL, _CONTROL_MEDIAN_SUFFIX)],
-            color=_COLOR_CONTROL,
-            linestyle=":",
-            linewidth=1.5,
-            label="Observation-pair permutation",
-            zorder=2,
-        )
-        panel_a.plot(
-            data.relative_depth,
-            data.series[_column(_ISOTROPIC_CONTROL, _CONTROL_MEDIAN_SUFFIX)],
-            color=_COLOR_CONTROL,
-            linestyle="-.",
-            linewidth=1.5,
-            label="Independent isotropic (single-token diagnostic)",
-            zorder=2,
-        )
-        panel_a.set_title("A  Fidelity by decoder depth", loc="left")
 
-        gap_point: np.ndarray = data.series[_column(_GAP, _TARGET_POINT_SUFFIX)]
-        panel_b.fill_between(
-            data.relative_depth,
-            data.series[_column(_GAP, _TARGET_LOWER_SUFFIX)],
-            data.series[_column(_GAP, _TARGET_UPPER_SUFFIX)],
-            color=_COLOR_CONTROL,
-            alpha=0.18,
-            linewidth=0.0,
-            label="95% paired prompt-bootstrap CI",
-            zorder=1,
-        )
-        panel_b.fill_between(
-            data.relative_depth,
-            0.0,
-            gap_point,
-            where=gap_point >= 0.0,
-            color=_COLOR_PRED,
-            alpha=0.20,
-            linewidth=0.0,
-            zorder=2,
-        )
-        panel_b.fill_between(
-            data.relative_depth,
-            0.0,
-            gap_point,
-            where=gap_point < 0.0,
-            color=_COLOR_ATTR,
-            alpha=0.20,
-            linewidth=0.0,
-            zorder=2,
-        )
-        positive_gap: np.ndarray = np.where(gap_point >= 0.0, gap_point, np.nan)
-        negative_gap: np.ndarray = np.where(gap_point <= 0.0, gap_point, np.nan)
-        panel_b.plot(
-            data.relative_depth,
-            positive_gap,
-            color=_COLOR_PRED,
-            linewidth=2.1,
-            label="Prediction-dominant gap",
-            zorder=3,
-        )
-        panel_b.plot(
-            data.relative_depth,
-            negative_gap,
-            color=_COLOR_ATTR,
-            linewidth=2.1,
-            label="Attribution-dominant gap",
-            zorder=3,
-        )
-        panel_b.axhline(0.0, color=_COLOR_CONTROL, linewidth=0.9, zorder=0)
-        panel_b.set_title("B  Prediction–attribution gap", loc="left")
-
-        for axis in axes:
-            axis.set_xlim(0.0, 1.0)
-            axis.set_xlabel("Relative decoder depth")
-            axis.grid(axis="y", color="#D9D9D9", linewidth=0.6, zorder=0)
-            axis.legend(loc="best", frameon=False)
-        panel_a.set_ylim(0.0, 1.0)
-        panel_a.set_ylabel("Mean pairwise Pearson R²")
-        gap_extent: float = max(
-            0.2,
-            float(
-                np.max(
-                    np.abs(
-                        np.concatenate(
-                            [
-                                data.series[_column(_GAP, _TARGET_LOWER_SUFFIX)],
-                                data.series[_column(_GAP, _TARGET_UPPER_SUFFIX)],
-                            ]
-                        )
-                    )
-                )
+        endpoints: tuple[tuple[str, str, float], ...] = (
+            (
+                r"$F_{\mathrm{pred}}$",
+                _COLOR_PRED,
+                float(data.series[_column(_PREDICTION, _TARGET_POINT_SUFFIX)][-1]),
+            ),
+            (
+                r"$F_{\mathrm{attr}}$",
+                _COLOR_ATTR,
+                float(data.series[_column(_ATTRIBUTION, _TARGET_POINT_SUFFIX)][-1]),
+            ),
+            (
+                "Control",
+                _COLOR_CONTROL,
+                float(
+                    data.series[
+                        _column(_GROUPED_CONTROL, _CONTROL_MEDIAN_SUFFIX)
+                    ][-1]
+                ),
             ),
         )
-        gap_limit: float = min(1.0, np.ceil(gap_extent * 20.0) / 20.0)
-        panel_b.set_ylim(-gap_limit, gap_limit)
-        panel_b.set_ylabel(r"Mean pairwise $R^2$ gap")
+        for label, color, endpoint in endpoints:
+            axis.annotate(
+                label,
+                xy=(1.0, endpoint),
+                xytext=(1.025, endpoint),
+                color=color,
+                fontsize=7.2,
+                va="center",
+                ha="left",
+                annotation_clip=False,
+                arrowprops={"arrowstyle": "-", "color": color, "linewidth": 0.8},
+            )
 
-        scope_label: str = {
-            "all": "all dialog segments",
-            "system": "system segments",
-            "user": "user segments",
-        }[data.scope]
-        if data.embedding_slot_included:
-            depth_label: str = (
-                f"{data.depth_count} aligned residual-stream depths; embedding included"
-            )
-        else:
-            depth_label = (
-                f"{data.depth_count} aligned decoder depths; embedding excluded"
-            )
-        figure.suptitle(
-            f"BoolQ sentence · {scope_label} · {depth_label}",
-            fontsize=11,
-            y=0.985,
-        )
-        figure.text(
-            0.5,
-            0.015,
-            "Target and gap ribbons are pointwise 95% prompt-cluster bootstrap CIs. "
-            "Control bands are empirical readout ranges, not confidence intervals. "
-            "Grouped 9-vs-8 and the permutation null target headline attribution; "
-            "isotropic targets the plotted single-token diagnostic. Pair-averaged "
-            "R² is not additive.",
-            ha="center",
-            va="bottom",
-            fontsize=7.5,
-        )
-        figure.subplots_adjust(
-            left=0.075, right=0.99, top=0.88, bottom=0.22, wspace=0.16
-        )
+        axis.set_xlim(0.0, 1.18)
+        axis.set_ylim(0.0, 1.0)
+        axis.set_xticks([0.0, 0.25, 0.5, 0.75, 1.0])
+        axis.set_xlabel("Relative decoder depth")
+        axis.set_ylabel(r"Mean pairwise Pearson $R^2$")
+        figure.subplots_adjust(left=0.20, right=0.96, top=0.98, bottom=0.20)
         try:
             _save_figure(figure, output_path, output_format)
         finally:

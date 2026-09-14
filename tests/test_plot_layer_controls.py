@@ -60,7 +60,7 @@ class _FakeAxis:
     def __init__(self) -> None:
         self.plots: list[dict[str, Any]] = []
         self.bands: list[dict[str, Any]] = []
-        self.title: str = ""
+        self.annotations: list[tuple[str, dict[str, Any]]] = []
 
     def plot(self, *_args: Any, **kwargs: Any) -> list[object]:
         self.plots.append(kwargs)
@@ -70,8 +70,9 @@ class _FakeAxis:
         self.bands.append(kwargs)
         return object()
 
-    def set_title(self, title: str, **_kwargs: Any) -> None:
-        self.title = title
+    def annotate(self, text: str, **kwargs: Any) -> object:
+        self.annotations.append((text, kwargs))
+        return object()
 
     def set_xlim(self, *_args: Any) -> None:
         pass
@@ -85,27 +86,13 @@ class _FakeAxis:
     def set_ylabel(self, *_args: Any) -> None:
         pass
 
-    def axhline(self, *_args: Any, **_kwargs: Any) -> object:
-        return object()
-
-    def grid(self, **_kwargs: Any) -> None:
-        pass
-
-    def legend(self, **_kwargs: Any) -> None:
+    def set_xticks(self, *_args: Any) -> None:
         pass
 
 
 class _FakeFigure:
     def __init__(self) -> None:
-        self.suptitle_text: str = ""
-        self.footer_text: str = ""
         self.saved_metadata: dict[str, Any] = {}
-
-    def suptitle(self, text: str, **_kwargs: Any) -> None:
-        self.suptitle_text = text
-
-    def text(self, _x: float, _y: float, text: str, **_kwargs: Any) -> None:
-        self.footer_text = text
 
     def subplots_adjust(self, **_kwargs: Any) -> None:
         pass
@@ -119,7 +106,8 @@ class _FakeFigure:
 class _FakePyplot:
     def __init__(self) -> None:
         self.figure: _FakeFigure = _FakeFigure()
-        self.axes: list[_FakeAxis] = [_FakeAxis(), _FakeAxis()]
+        self.axis: _FakeAxis = _FakeAxis()
+        self.subplots_kwargs: dict[str, Any] = {}
         self.closed: bool = False
 
     def rc_context(
@@ -128,9 +116,10 @@ class _FakePyplot:
         return contextlib.nullcontext()
 
     def subplots(
-        self, *_args: Any, **_kwargs: Any
-    ) -> tuple[_FakeFigure, list[_FakeAxis]]:
-        return self.figure, self.axes
+        self, *_args: Any, **kwargs: Any
+    ) -> tuple[_FakeFigure, _FakeAxis]:
+        self.subplots_kwargs = kwargs
+        return self.figure, self.axis
 
     def close(self, _figure: _FakeFigure) -> None:
         self.closed = True
@@ -206,47 +195,31 @@ class PlotLayerControlsTest(TestCase):
             with open(output_path, "rb") as output:
                 self.assertEqual(output.read(), b"synthetic figure")
 
-        panel_a_labels: set[str] = {call["label"] for call in fake_pyplot.axes[0].plots}
-        panel_a_band_labels: set[str] = {
-            call["label"] for call in fake_pyplot.axes[0].bands
+        line_labels: set[str] = {call["label"] for call in fake_pyplot.axis.plots}
+        band_labels: set[str] = {
+            call["label"] for call in fake_pyplot.axis.bands
         }
         self.assertEqual(
-            panel_a_labels,
+            line_labels,
             {
                 r"$F_{\mathrm{pred}}$",
-                r"Signed $F_{\mathrm{attr}}$",
-                "Single-token attribution diagnostic",
-                "Readout-compatible controls (median)",
-                "Observation-pair permutation",
-                "Independent isotropic (single-token diagnostic)",
+                r"$F_{\mathrm{attr}}$",
+                "Control",
             },
         )
         self.assertEqual(
-            panel_a_band_labels,
+            band_labels,
             {
                 r"$F_{\mathrm{pred}}$: 95% prompt-bootstrap CI",
                 r"$F_{\mathrm{attr}}$: 95% prompt-bootstrap CI",
-                "Controls: empirical 2.5–97.5% readout range",
+                "Control: empirical 2.5–97.5% readout interval",
             },
         )
-
-        panel_b_labels: set[str] = {call["label"] for call in fake_pyplot.axes[1].plots}
-        panel_b_band_labels: set[str] = {
-            call["label"] for call in fake_pyplot.axes[1].bands if "label" in call
-        }
         self.assertEqual(
-            panel_b_labels,
-            {"Prediction-dominant gap", "Attribution-dominant gap"},
+            {text for text, _kwargs in fake_pyplot.axis.annotations},
+            {r"$F_{\mathrm{pred}}$", r"$F_{\mathrm{attr}}$", "Control"},
         )
-        self.assertEqual(
-            panel_b_band_labels,
-            {"95% paired prompt-bootstrap CI"},
-        )
-        self.assertIn(
-            "6 aligned decoder depths; embedding excluded",
-            fake_pyplot.figure.suptitle_text,
-        )
-        self.assertIn("not additive", fake_pyplot.figure.footer_text)
+        self.assertEqual(fake_pyplot.subplots_kwargs["figsize"], (2.75, 2.15))
         self.assertEqual(
             fake_pyplot.figure.saved_metadata["Software"],
             "benchmark_scripts.plot_layer_controls",
