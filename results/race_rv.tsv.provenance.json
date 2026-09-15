@@ -253,8 +253,8 @@
       "size_bytes": 28473
     },
     "benchmark_scripts/run_all_benchmarks.sh": {
-      "sha256": "1bdd5a89a2335ffa28f1c931f5955f498c4752f1e4cc697a686a1b9bbaab46dd",
-      "size_bytes": 9932
+      "sha256": "2fde97900bafb516c0753df81adecbb7ab7f4f3cdcda113c4b571ddb1b6c24d9",
+      "size_bytes": 9922
     },
     "surrogate/eval_constants.py": {
       "sha256": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
