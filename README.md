@@ -299,7 +299,47 @@ RACE is evaluated as a multivariate four-label signal using centered RV. The
 `anchor_a` is included as a three-dimensional sensitivity. Hosted comparisons
 use model-pair-specific finite complete cases and report their coverage.
 
-### 5. Validate and seal
+### 5. Run the Muse Glimmer robustness extension
+
+[Muse Glimmer](robustness/muse_glimmer/README.md) is kept separate from the
+paper's fixed model cohort. The public runner pins and content-verifies the
+exact Hugging Face revision, uses the model's direct-response routing prefix,
+and requires an exact match to the committed BoolQ sentence coordinates.
+
+```bash
+pip install -e ".[glimmer]"
+
+CUDA_VISIBLE_DEVICES=0 python -m benchmark_scripts.run_glimmer_boolq \
+    --dataset-file /path/to/google_boolq_validation.tsv \
+    --results-dir /path/to/glimmer-attention-run \
+    --phases attention
+
+CUDA_VISIBLE_DEVICES=1 python -m benchmark_scripts.run_glimmer_boolq \
+    --dataset-file /path/to/google_boolq_validation.tsv \
+    --results-dir /path/to/glimmer-ablation-run \
+    --phases ablation --batch-size 2
+
+python -m benchmark_scripts.merge_phase_results \
+    --attention-results-dir /path/to/glimmer-attention-run \
+    --ablation-results-dir /path/to/glimmer-ablation-run \
+    --output-results-dir robustness/muse_glimmer \
+    --benchmark boolq --pregrouper sentence \
+    --model muse-glimmer-30b
+
+python -m benchmark_scripts.glimmer_robustness \
+    --extension-results-dir robustness/muse_glimmer
+```
+
+The committed artifact runs the two scoring phases concurrently on separate
+GPUs and preserves both execution receipts in the merged receipt. A direct
+single-process `--phases attention,ablation` run computes the same raw scores,
+but does not reproduce that split-run receipt; the public robustness analyzer
+therefore expects the merge workflow shown above. The derived extension
+reports only `F_pred` and signed `F_attr`: Glimmer's nonlinear output softcap
+makes the stored fixed-unembedding projection a useful representation
+diagnostic, but not an exact decomposition of output log odds.
+
+### 6. Validate and seal
 
 ```bash
 python -m benchmark_scripts.validate_results \
@@ -308,11 +348,13 @@ python -m benchmark_scripts.validate_results \
     --results-dir results --cohort paper --require-derived
 python -m benchmark_scripts.validate_results \
     --results-dir results --cohort paper --require-derived --verify-manifest
+python -m benchmark_scripts.glimmer_robustness --verify-existing
 ```
 
 Validation checks segment identity, complete model grids, raw artifact hashes,
 hosted request-status consistency, coverage, derived-table provenance, and the
-top-level release manifest.
+top-level release manifest. The final command independently verifies the
+optional Glimmer raw and derived artifacts under `robustness/muse_glimmer`.
 
 ## License
 
