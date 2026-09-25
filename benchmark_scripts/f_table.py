@@ -31,7 +31,7 @@ Output schema (tab-separated)::
       F_attn_mean_to_attr, F_attn_max_to_attr
 
 ``statistic`` is ``spearman``, ``pearson_r``, or ``pearson_r2``. The default
-analysis uses user-message segment coordinates, the entailment-minus-
+analysis uses full-dialog segment coordinates, the entailment-minus-
 contradiction ANLI contrast, pairwise-complete observations, and the fixed
 11-model release cohort. ``--all-models`` opts into every discovered model.
 """
@@ -1510,7 +1510,7 @@ def main() -> None:
     parser.add_argument(
         "--scopes",
         nargs="+",
-        default=["user"],
+        default=["all"],
         choices=["all", "system", "user"],
         help="Message-role strata to compute from the same raw artifact.",
     )

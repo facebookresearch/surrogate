@@ -3,7 +3,7 @@
   "generator": {
     "module": "benchmark_scripts.layerwise_fidelity",
     "provenance_writer_sha256": "a61dc3d512acf567d255528ad56a6a95d81d9dec9047b4d00f07589da94ba50b",
-    "source_sha256": "3060d2c577584807176abb4e6c3c6df4b95a373ade8cf749ed7fcfd673b7d2fe"
+    "source_sha256": "a6bcb964d20cfc9e8ecd125b1adc4db84dca7b92ea06fa60c53d510b9d6902bb"
   },
   "inputs": {
     "anli_r1/sentence/llama-3.1-8b-instruct/layers": {
@@ -229,8 +229,8 @@
   },
   "output": {
     "path": "layerwise_fidelity.tsv",
-    "sha256": "ccf544fc99bf2c5aaa641b99077d2514ed213e257774ef78ab935148639dafb2",
-    "size_bytes": 2136574
+    "sha256": "eee1c1199d57ed9e8e75028340cb1095015c8af2e0602fbe5a5d49de2aa2fb12",
+    "size_bytes": 2126123
   },
   "parameters": {
     "anli_contrast": "entailment_contradiction",
@@ -267,17 +267,17 @@
       "qwen2.5-14b-instruct"
     ],
     "scopes": [
-      "user"
+      "all"
     ],
     "seed": 42
   },
   "schema_version": 1,
   "software": {
-    "numpy": "2.2.3",
-    "pandas": "2.2.3",
+    "numpy": "2.5.3",
+    "pandas": "2.3.3",
     "python": "3.12.14+meta",
     "python_implementation": "CPython",
-    "scipy": "1.15.2",
+    "scipy": "1.18.1",
     "tqdm": "4.67.3"
   },
   "supporting_sources": {
@@ -290,8 +290,8 @@
       "size_bytes": 8425
     },
     "benchmark_scripts/f_table.py": {
-      "sha256": "57dd4141d0d320bac277f4b80a56b88d6bded896dc5ea5bf4309b4bac660b248",
-      "size_bytes": 63628
+      "sha256": "1b438818e29473a5a2a22445c67c19add6b04a9c3004f5aa23f9537bc915b666",
+      "size_bytes": 63626
     },
     "surrogate/eval_constants.py": {
       "sha256": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",

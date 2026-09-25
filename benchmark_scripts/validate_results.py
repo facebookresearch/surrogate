@@ -113,11 +113,14 @@ RELEASE_PAPER_DERIVED_TABLES: tuple[str, ...] = (
     "f_table.tsv",
     "f_table_finite_extreme_sensitivity.tsv",
     "race_rv.tsv",
+    "anli_rv.tsv",
+    "multiclass_floor_sensitivity.tsv",
 )
 RELEASE_OPEN_DERIVED_TABLES: tuple[str, ...] = (
     "f_table_open.tsv",
     "f_table_finite_extreme_sensitivity_open.tsv",
     "race_rv_open.tsv",
+    "anli_rv_open.tsv",
 )
 RELEASE_LAYERWISE_DERIVED_TABLES: tuple[str, ...] = ("layerwise_fidelity.tsv",)
 RELEASE_LAMBADA_CANARY_MODELS: tuple[str, ...] = (
@@ -445,6 +448,10 @@ LAYER_DERIVED_SUPPORTING_SOURCE_FILES: tuple[str, ...] = (
 F_TABLE_DERIVED_SUPPORTING_SOURCE_FILES: tuple[str, ...] = (
     *DERIVED_SUPPORTING_SOURCE_FILES,
     "benchmark_scripts/layerwise_fidelity.py",
+)
+ANLI_RV_DERIVED_SUPPORTING_SOURCE_FILES: tuple[str, ...] = (
+    *DERIVED_SUPPORTING_SOURCE_FILES,
+    "benchmark_scripts/rv.py",
 )
 
 
@@ -3593,7 +3600,7 @@ def _validate_layerwise_endpoint_consistency(
     ).isin(layer_configs)
     ordinary_open: pd.DataFrame = ordinary[
         ordinary_configs
-        & ordinary["scope"].eq("user")
+        & ordinary["scope"].eq("all")
         & ordinary["metric"].isin(("F_pred", "F_attr"))
         & ordinary["model_s"].isin(OPEN_MODELS)
         & ordinary["model_t"].isin(OPEN_MODELS)
@@ -3802,8 +3809,8 @@ def _validate_layerwise_derived_output(
         or not frame["relative_depth_grid_size"].eq(depth_grid_size).all()
         or not frame["cohort"].eq("open").all()
         or not frame["pair_population"].eq("open_open").all()
-        or not frame["scope"].eq("user").all()
-        or not frame["requested_scope"].eq("user").all()
+        or not frame["scope"].eq("all").all()
+        or not frame["requested_scope"].eq("all").all()
         or not frame["availability_status"].eq("available").all()
         or not frame["unavailable_reason"].fillna("").eq("").all()
         or not frame["aggregation"].eq("row_pooled").all()
@@ -3835,7 +3842,7 @@ def _validate_layerwise_derived_output(
             )
             if (
                 not metric_rows["resolved_scope"]
-                .eq(_resolved_scope(str(metric), "user"))
+                .eq(_resolved_scope(str(metric), "all"))
                 .all()
                 or not metric_rows["resolved_source_contrast"].eq(source_contrast).all()
                 or not metric_rows["resolved_target_contrast"].eq(target_contrast).all()
@@ -3857,7 +3864,7 @@ def _validate_layerwise_derived_output(
             {"benchmark": benchmark, "pregrouper": pregrouper}
             for benchmark, pregrouper in LAYERWISE_CONFIGS
         ],
-        "scopes": ["user"],
+        "scopes": ["all"],
         "anli_contrast": "entailment_contradiction",
         "models": list(OPEN_MODELS),
         "depth_grid_size": depth_grid_size,
@@ -3903,7 +3910,7 @@ def _validate_derived_outputs(
         (
             benchmark,
             pregrouper,
-            "user",
+            "all",
             (
                 "entailment_contradiction"
                 if benchmark.startswith("anli_")
@@ -3964,6 +3971,50 @@ def _validate_derived_outputs(
             unsupported_attribution_configs,
         )
 
+    anli_filename: str = "anli_rv_open.tsv" if cohort_name == "open" else "anli_rv.tsv"
+    anli_path: str = os.path.join(results_dir, anli_filename)
+    anli: pd.DataFrame = _read_derived(anli_path)
+    parameters = _validate_derived_sidecar(
+        results_dir,
+        anli_path,
+        "benchmark_scripts.anli_rv",
+        [(benchmark, "sentence") for benchmark in ("anli_r1", "anli_r2", "anli_r3")],
+        models,
+        supporting_source_files=ANLI_RV_DERIVED_SUPPORTING_SOURCE_FILES,
+    )
+    expected_anli_parameters: dict[str, Any] = {
+        "benchmarks": ["anli_r1", "anli_r2", "anli_r3"],
+        "scopes": ["all"],
+        "representation": "all_pairwise_log_odds",
+        "bootstrap_resamples": 1000,
+        "confidence_level": 0.95,
+        "seed": 42,
+        "cohort": cohort_name,
+        "missingness_policy": "pair_specific_complete_case",
+    }
+    if parameters != expected_anli_parameters:
+        raise ValueError(f"Incorrect ANLI RV derivation parameters in {anli_path}")
+    expected_anli_keys: set[tuple[str, str, str, str]] = {
+        (benchmark, model_s, model_t, metric)
+        for benchmark in ("anli_r1", "anli_r2", "anli_r3")
+        for model_s, model_t in itertools.combinations(models, 2)
+        for metric in ("F_pred_rv", "F_attr_rv")
+    }
+    actual_anli_keys: set[tuple[str, str, str, str]] = set(
+        anli[["benchmark", "model_s", "model_t", "metric"]].itertuples(
+            index=False, name=None
+        )
+    )
+    if (
+        actual_anli_keys != expected_anli_keys
+        or not anli["scope"].eq("all").all()
+        or not anli["representation"].eq("all_pairwise_log_odds").all()
+        or not anli["statistic"].eq("rv").all()
+        or not anli["missingness_policy"].eq("pair_specific_complete_case").all()
+        or not anli["aggregation"].eq("row_pooled").all()
+    ):
+        raise ValueError(f"{anli_path} has an incorrect ANLI result grid or metadata")
+
     race_filename: str = "race_rv_open.tsv" if cohort_name == "open" else "race_rv.tsv"
     race_path: str = os.path.join(results_dir, race_filename)
     race: pd.DataFrame = _read_derived(race_path)
@@ -3975,7 +4026,7 @@ def _validate_derived_outputs(
         models,
     )
     expected_race_parameters: dict[str, Any] = {
-        "scopes": ["user"],
+        "scopes": ["all"],
         "representations": ["all_pairs", "anchor_a"],
         "scalar_representation": "canonical_scalar",
         "scalar_attribution": "correct_vs_rest",
@@ -4000,7 +4051,7 @@ def _validate_derived_outputs(
     if not required_columns.issubset(race.columns):
         raise ValueError(f"{race_path} omits RACE coverage metadata")
     expected_race_keys: set[tuple[str, str, str, str, str]] = {
-        ("user", representation, model_s, model_t, metric)
+        ("all", representation, model_s, model_t, metric)
         for representation in ("all_pairs", "anchor_a")
         for model_s, model_t in itertools.combinations(models, 2)
         for metric in ("F_pred_rv", "F_attr_rv")
@@ -4023,12 +4074,12 @@ def _validate_derived_outputs(
         "F_align_to_attr_rv",
     )
     expected_race_keys.update(
-        ("user", "canonical_scalar", model_s, model_t, metric)
+        ("all", "canonical_scalar", model_s, model_t, metric)
         for model_s, model_t in itertools.combinations(race_open_models, 2)
         for metric in scalar_metrics
     )
     expected_race_keys.update(
-        ("user", "canonical_scalar", model_s, model_t, metric)
+        ("all", "canonical_scalar", model_s, model_t, metric)
         for model_s in race_open_models
         for model_t in models
         if model_s != model_t

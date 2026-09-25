@@ -278,7 +278,7 @@ class TestValidateResults(TestCase):
         identity: dict[str, Any] = {
             "benchmark": "boolq",
             "pregrouper": "sentence",
-            "scope": "user",
+            "scope": "all",
             "contrast": "canonical",
             "model_s": OPEN_MODELS[0],
             "model_t": OPEN_MODELS[1],
@@ -989,6 +989,8 @@ class TestValidateResults(TestCase):
         allowed: set[str] = _allowed_release_files("open")
         self.assertIn("layerwise_fidelity.tsv", allowed)
         self.assertIn("layerwise_fidelity.tsv.provenance.json", allowed)
+        self.assertIn("anli_rv_open.tsv", allowed)
+        self.assertIn("anli_rv_open.tsv.provenance.json", allowed)
         for benchmark, pregrouper in LAYERWISE_CONFIGS:
             for model in OPEN_MODELS:
                 prefix: str = f"{benchmark}/{pregrouper}/{model}"

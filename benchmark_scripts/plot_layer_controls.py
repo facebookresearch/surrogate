@@ -43,6 +43,9 @@ _GAP: str = "prediction_minus_attribution_gap"
 _COLOR_PRED: str = "#584486"
 _COLOR_ATTR: str = "#0091A1"
 _COLOR_CONTROL: str = "#9A958F"
+_TARGET_LINE_WIDTH: float = 1.25
+_CONTROL_LINE_WIDTH: float = 1.0
+_ANNOTATION_LINE_WIDTH: float = 0.6
 
 
 def _column(prefix: str, suffix: str) -> str:
@@ -294,7 +297,7 @@ def _plot_target(
         data.series[_column(target, _TARGET_POINT_SUFFIX)],
         color=color,
         linestyle=linestyle,
-        linewidth=2.1,
+        linewidth=_TARGET_LINE_WIDTH,
         label=line_label,
         zorder=3,
     )
@@ -326,7 +329,7 @@ def _plot_control_band(
         data.series[_column(family, _CONTROL_MEDIAN_SUFFIX)],
         color=color,
         linestyle="--",
-        linewidth=1.8,
+        linewidth=_CONTROL_LINE_WIDTH,
         label=line_label,
         zorder=2,
     )
@@ -466,7 +469,11 @@ def plot_summary(summary_path: str, output_path: str) -> None:
                 va="center",
                 ha="left",
                 annotation_clip=False,
-                arrowprops={"arrowstyle": "-", "color": color, "linewidth": 0.8},
+                arrowprops={
+                    "arrowstyle": "-",
+                    "color": color,
+                    "linewidth": _ANNOTATION_LINE_WIDTH,
+                },
             )
 
         prediction_upper: float = float(

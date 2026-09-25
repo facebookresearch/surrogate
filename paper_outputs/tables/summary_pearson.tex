@@ -1,22 +1,22 @@
-% Canonical user-segment, pairwise-complete Pearson r^2; entries are min / median / max.
+% Canonical full-dialog, pairwise-complete Pearson r^2; entries are min / median / max.
 % The final column is All<->All for black-box rows and Open->All for cross-level rows.
 \begin{tabular}{llccc}
 \toprule
 Group & Metric & Open$\to$Open & Open$\to$Hosted & All$\leftrightarrow$All / Open$\to$All \\
 \midrule
 Black-box & $F_{\mathrm{pred}}$ & .174 / .650 / .795 & .097 / .669 / .845 & .097 / .718 / .956 \\
- & $F_{\mathrm{attr}}$ & .126 / .453 / .640 & .062 / .466 / .635 & .062 / .514 / .883 \\
+ & $F_{\mathrm{attr}}$ & .089 / .399 / .561 & .031 / .404 / .555 & .031 / .451 / .826 \\
 \midrule
-Representation-level & $F_{\mathrm{attn}}^{\mathrm{mean}}$ & .933 / .968 / .986 & --- & --- \\
- & $F_{\mathrm{attn}}^{\mathrm{max}}$ & .490 / .864 / .927 & --- & --- \\
- & $F_{\mathrm{attn}}^{\mathrm{rollout}}$ & .606 / .802 / .910 & --- & --- \\
- & $F_{\mathrm{mag}}$ & .563 / .700 / .813 & --- & --- \\
- & $F_{\mathrm{align}}$ & .048 / .243 / .350 & --- & --- \\
+Representation-level & $F_{\mathrm{attn}}^{\mathrm{mean}}$ & .747 / .904 / .984 & --- & --- \\
+ & $F_{\mathrm{attn}}^{\mathrm{max}}$ & .643 / .859 / .906 & --- & --- \\
+ & $F_{\mathrm{attn}}^{\mathrm{rollout}}$ & .512 / .861 / .938 & --- & --- \\
+ & $F_{\mathrm{mag}}$ & .639 / .843 / .904 & --- & --- \\
+ & $F_{\mathrm{align}}$ & .050 / .201 / .296 & --- & --- \\
 \midrule
-Mechanistic-to-causal & $F_{\mathrm{mag}\to|\mathrm{attr}|}$ & .224 / .443 / .632 & .337 / .538 / .647 & .224 / .514 / .647 \\
- & $F_{\mathrm{align}\to\mathrm{attr}}$ & .072 / .292 / .447 & .038 / .300 / .459 & .038 / .297 / .459 \\
- & $F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{mean}}$ & .000 / .003 / .043 & .000 / .001 / .029 & .000 / .002 / .043 \\
- & $F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{max}}$ & .000 / .004 / .051 & .000 / .002 / .043 & .000 / .003 / .051 \\
- & $F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{rollout}}$ & .000 / .006 / .044 & .000 / .001 / .010 & .000 / .002 / .044 \\
+Mechanistic-to-causal & $F_{\mathrm{mag}\to|\mathrm{attr}|}$ & .000 / .065 / .231 & .000 / .112 / .283 & .000 / .108 / .283 \\
+ & $F_{\mathrm{align}\to\mathrm{attr}}$ & .048 / .254 / .381 & .033 / .267 / .362 & .033 / .257 / .381 \\
+ & $F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{mean}}$ & .000 / .005 / .042 & .000 / .001 / .024 & .000 / .002 / .042 \\
+ & $F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{max}}$ & .000 / .003 / .032 & .000 / .002 / .019 & .000 / .002 / .032 \\
+ & $F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{rollout}}$ & .000 / .003 / .063 & .000 / .004 / .014 & .000 / .003 / .063 \\
 \bottomrule
 \end{tabular}

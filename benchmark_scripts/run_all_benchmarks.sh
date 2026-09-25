@@ -302,6 +302,10 @@ fi
     --results-dir "$RESULTS_DIR" \
     --output "$RESULTS_DIR/race_rv${suffix}.tsv" \
     --cohort "$cohort"
+"$PYTHON_BIN" -m benchmark_scripts.anli_rv \
+    --results-dir "$RESULTS_DIR" \
+    --output "$RESULTS_DIR/anli_rv${suffix}.tsv" \
+    --cohort "$cohort"
 "$PYTHON_BIN" -m benchmark_scripts.layerwise_fidelity \
     --results-dir "$RESULTS_DIR" \
     --output "$RESULTS_DIR/layerwise_fidelity.tsv"

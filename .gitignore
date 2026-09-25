@@ -24,6 +24,10 @@ results/**/*_layer_controls_run.json
 !results/f_table_finite_extreme_sensitivity.tsv
 !results/race_rv_open.tsv
 !results/race_rv.tsv
+!results/anli_rv.tsv
+!results/anli_rv.tsv.provenance.json
+!results/multiclass_floor_sensitivity.tsv
+!results/multiclass_floor_sensitivity.tsv.provenance.json
 !results/layerwise_fidelity.tsv
 !results/coverage.tsv
 !results/artifact_manifest.json

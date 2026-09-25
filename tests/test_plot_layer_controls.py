@@ -213,6 +213,12 @@ class PlotLayerControlsTest(TestCase):
                 "Control",
             },
         )
+        line_widths: dict[str, float] = {
+            call["label"]: call["linewidth"] for call in fake_pyplot.axis.plots
+        }
+        self.assertEqual(line_widths[r"$F_{\mathrm{pred}}$"], 1.25)
+        self.assertEqual(line_widths[r"$F_{\mathrm{attr}}$"], 1.25)
+        self.assertEqual(line_widths["Control"], 1.0)
         self.assertEqual(
             band_labels,
             {

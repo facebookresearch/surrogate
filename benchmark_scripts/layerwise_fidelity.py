@@ -816,7 +816,7 @@ def main() -> None:
     parser.add_argument("--benchmarks", nargs="+", default=None)
     parser.add_argument("--pregrouper", default="sentence")
     parser.add_argument(
-        "--scopes", nargs="+", choices=["all", "system", "user"], default=["user"]
+        "--scopes", nargs="+", choices=["all", "system", "user"], default=["all"]
     )
     parser.add_argument(
         "--anli-contrast",

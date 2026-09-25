@@ -37,6 +37,10 @@ results/
 ├── f_table_finite_extreme_sensitivity.tsv.provenance.json
 ├── race_rv.tsv
 ├── race_rv.tsv.provenance.json
+├── anli_rv.tsv
+├── anli_rv.tsv.provenance.json
+├── multiclass_floor_sensitivity.tsv
+├── multiclass_floor_sensitivity.tsv.provenance.json
 ├── layerwise_fidelity.tsv
 ├── layerwise_fidelity.tsv.provenance.json
 └── {benchmark}/{pregrouper}/
@@ -103,8 +107,8 @@ tokenizer.
 
 ## Canonical analyses
 
-`f_table.tsv` evaluates user-message segment coordinates while retaining the
-complete dialog as model context. ANLI prediction and attribution use
+`f_table.tsv` evaluates every system- and user-message coordinate in the
+complete dialog. Scalar ANLI prediction and attribution diagnostics use
 entailment-minus-contradiction. Non-finite values are removed separately for
 each model pair, so every row reports both observed and expected observation
 and prompt counts plus coverage fractions. The estimand is therefore
@@ -146,6 +150,15 @@ scalar mechanistic signal with the target model's correct-vs-rest ablation
 model-pair-specific finite complete cases with explicit observation and prompt
 coverage.
 
+`anli_rv.tsv` is the canonical ANLI black-box analysis. It uses centered RV
+over the three pairwise entailment--neutral--contradiction margins, with the
+same full-dialog coordinates and pair-specific complete-case policy.
+
+`multiclass_floor_sensitivity.tsv` repeats the ANLI and RACE multivariate
+analyses while moving a finite floor below each model and benchmark's lowest
+observed label log-probability. It is an appendix sensitivity analysis; the
+complete-case RV tables remain canonical.
+
 `layerwise_fidelity.tsv` reports open-model `F_pred` and signed `F_attr` at
 matched relative decoder depth for BoolQ and ANLI R1-R3. Its compact raw layer
 artifacts retain scores for every label and all full-dialog segment coordinates,
@@ -156,6 +169,7 @@ single-token label aliases and are identified as a diagnostic approximation to
 the grouped-logsumexp attribution direction. The canonical table uses linear
 interpolation across native decoder blocks; `--depth-alignment nearest_native`
 provides an unsmoothed post-hoc sensitivity without another model run.
+The canonical table uses all full-dialog coordinates.
 
 ## Reproduction
 
@@ -177,6 +191,7 @@ python -m benchmark_scripts.f_table \
     --api-infinity-policy finite_extreme \
     --output results/f_table_finite_extreme_sensitivity.tsv
 python -m benchmark_scripts.race_rv
+python -m benchmark_scripts.anli_rv
 python -m benchmark_scripts.layerwise_fidelity
 
 python -m benchmark_scripts.validate_results \

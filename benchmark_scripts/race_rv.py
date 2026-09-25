@@ -536,7 +536,7 @@ def main() -> None:
     parser.add_argument("--results-dir", default="results")
     parser.add_argument("--output", default=None)
     parser.add_argument(
-        "--scopes", nargs="+", default=["user"], choices=["all", "system", "user"]
+        "--scopes", nargs="+", default=["all"], choices=["all", "system", "user"]
     )
     parser.add_argument("--bootstrap-resamples", type=int, default=1000)
     parser.add_argument("--confidence-level", type=float, default=0.95)

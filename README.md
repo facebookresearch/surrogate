@@ -5,7 +5,8 @@ prediction, attribution, attention, and representation fidelity across language
 models.
 
 Models always receive the complete dialog. The headline segment-level analysis
-selects user-message coordinates from that shared full-dialog segmentation.
+uses every coordinate in that shared full-dialog segmentation, including both
+system- and user-message coordinates.
 
 ## Installation
 
@@ -26,9 +27,10 @@ pytest tests/
 
 [`notebooks/paper_figures.ipynb`](notebooks/paper_figures.ipynb) regenerates
 the revised paper's public-data tables and figures from the committed result
-artifacts. It uses the canonical user-segment, pairwise-complete analysis,
-including entailment-minus-contradiction for ANLI and multivariate RV for
-RACE. The per-layer figure reports unnormalized `F_pred`, signed `F_attr`,
+artifacts. It uses the canonical full-dialog, pairwise-complete analysis,
+including multivariate RV over all pairwise label margins for ANLI and RACE;
+scalar ANLI diagnostics retain entailment-minus-contradiction. The per-layer
+figure reports unnormalized `F_pred`, signed `F_attr`,
 and the matched grouped readout-compatible control. Notebook-only appendix
 outputs include the prediction-attribution gap and a tuned-lens sensitivity
 panel reading
@@ -82,6 +84,7 @@ consolidate_results -> results/{benchmark}_{pregrouper}_segments.tsv
 compute_logodds     -> results/{benchmark}_{pregrouper}_logodds.tsv
 f_table             -> results/f_table.tsv
 race_rv             -> results/race_rv.tsv
+anli_rv             -> results/anli_rv.tsv
 run_layerwise       -> results/{benchmark}/{pregrouper}/{model}_layers.tsv.gz
 layerwise_fidelity  -> results/layerwise_fidelity.tsv
 build_layer_control_spec -> layer_controls/layer_control_spec.json
@@ -168,9 +171,8 @@ python -m benchmark_scripts.consolidate_results --benchmark boolq
 python -m benchmark_scripts.compute_logodds --benchmark boolq
 ```
 
-Token tables retain every queried ANLI label, so all directed contrasts can be
-computed without another model run. The headline analysis selects
-`logodds_entailment_contradiction`.
+Token tables retain every queried ANLI label, so all directed contrasts and the
+symmetric three-margin RV analysis can be computed without another model run.
 
 ### 4. Generate fidelity tables
 
@@ -185,6 +187,9 @@ python -m benchmark_scripts.f_table \
 
 # Canonical multivariate RACE analysis
 python -m benchmark_scripts.race_rv
+
+# Canonical multivariate ANLI analysis (E-N, E-C, and N-C margins)
+python -m benchmark_scripts.anli_rv
 
 # Compact per-layer scores for one model/configuration
 python -m benchmark_scripts.run_layerwise \
@@ -249,8 +254,10 @@ python -m benchmark_scripts.plot_layer_controls \
     paper_outputs/figures/fig5_per_layer_fidelity.pdf
 ```
 
-The headline plot reports per-layer grouped-logsumexp `F_pred`, signed
-`F_attr`, and the grouped 9-vs-8 readout-compatible control. Target ribbons are
+The stored control plot reports user-coordinate per-layer grouped-logsumexp
+`F_pred`, signed `F_attr`, and the grouped 9-vs-8 readout-compatible control.
+It remains an explicitly labeled sensitivity until the control projections are
+recaptured over the full dialog. Target ribbons are
 95% prompt-cluster bootstrap intervals; the control ribbon is the empirical
 2.5--97.5% range across directions, not a confidence interval. Pairwise r²
 values are averaged over the ten open-model pairs and must not be interpreted
@@ -280,9 +287,9 @@ python -m benchmark_scripts.f_table \
 ```
 
 Layer artifacts likewise retain every configured label and every system/user
-segment. The canonical layerwise table uses user coordinates and ANLI
-entailment-minus-contradiction, while entailment-minus-neutral and the `all`,
-`system`, and `user` scopes can be selected without rerunning a model. Layer
+segment. The canonical layerwise table uses all full-dialog coordinates and
+ANLI entailment-minus-contradiction, while entailment-minus-neutral and the
+`all`, `system`, and `user` scopes can be selected without rerunning a model. Layer
 files contain label-level scalars only—never hidden-state vectors. Slot zero is
 the embedding output; later slots are decoder-block outputs with the model's
 final normalization applied. Relative-depth comparisons exclude the embedding
