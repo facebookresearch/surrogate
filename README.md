@@ -294,10 +294,13 @@ runs use BF16, SDPA, automatic device placement, and batch size 32. Use
 `run_all_benchmarks.sh` to generate the required five-model,
 four-configuration matrix.
 
-RACE is evaluated as a multivariate four-label signal using centered RV. The
-`all_pairs` representation is the six pairwise A-D margin system;
-`anchor_a` is included as a three-dimensional sensitivity. Hosted comparisons
-use model-pair-specific finite complete cases and report their coverage.
+RACE prediction and attribution are evaluated as multivariate four-label
+signals using centered RV. The `all_pairs` representation is the six pairwise
+A--D margin system; `anchor_a` is included as a three-dimensional sensitivity.
+Scalar representation metrics and their attribution comparisons use centered
+RV on the answer-conditioned correct-vs-rest contrast (equivalently Pearson
+`r²` in one dimension). Hosted comparisons use model-pair-specific finite
+complete cases and report their coverage.
 
 ### 5. Run the Muse Glimmer robustness extension
 

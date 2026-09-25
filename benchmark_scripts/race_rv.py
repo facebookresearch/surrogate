@@ -5,11 +5,18 @@
 
 # pyre-strict
 
-"""Compute stated multivariate RACE fidelity with centered RV coefficients.
+"""Compute RACE fidelity with centered RV coefficients.
 
 Hosted top-k outputs follow the paper Figure 13 implementation: each model pair
 is evaluated on rows where all six pairwise margins are finite for both models.
 Coverage is emitted explicitly because these complete cases are pair-specific.
+
+Prediction and attribution use the six pairwise A--D margins. Representation
+metrics use their scalar segment signals, and representation-to-attribution
+metrics use the answer-conditioned correct-vs-rest ablation. Centered RV on
+these scalar quantities is exactly Pearson r-squared, preserving the paper's
+RACE convention without pretending that a scalar mechanistic signal has six
+label coordinates.
 """
 
 from __future__ import annotations
@@ -31,6 +38,20 @@ from benchmark_scripts.derived_provenance import (
 from benchmark_scripts.f_table import OPEN_MODELS, PAPER_MODELS
 
 LABELS: tuple[str, ...] = ("a", "b", "c", "d")
+SCALAR_METRIC_COLUMNS: dict[str, str] = {
+    "F_attn_mean_rv": "attention_mean",
+    "F_attn_max_rv": "attention_max",
+    "F_attn_rollout_rv": "attention_rollout",
+    "F_mag_rv": "delta_norm_postnorm",
+    "F_align_rv": "alignment",
+}
+CROSS_METRICS: dict[str, tuple[str, bool]] = {
+    "F_attn_mean_to_attr_rv": ("attention_mean", False),
+    "F_attn_max_to_attr_rv": ("attention_max", False),
+    "F_attn_rollout_to_attr_rv": ("attention_rollout", False),
+    "F_mag_to_attr_rv": ("delta_norm_postnorm", True),
+    "F_align_to_attr_rv": ("alignment", False),
+}
 
 
 def _rv(x: np.ndarray, y: np.ndarray) -> float:
@@ -62,13 +83,14 @@ def _pair_vectors(frame: pd.DataFrame, representation: str) -> np.ndarray:
         if representation == "all_pairs"
         else [(labels[0], label) for label in labels[1:]]
     )
-    return np.column_stack(
-        [
-            frame[f"label_lp_{first}"].to_numpy(dtype=float)
-            - frame[f"label_lp_{second}"].to_numpy(dtype=float)
-            for first, second in pairs
-        ]
-    )
+    with np.errstate(invalid="ignore"):
+        return np.column_stack(
+            [
+                frame[f"label_lp_{first}"].to_numpy(dtype=float)
+                - frame[f"label_lp_{second}"].to_numpy(dtype=float)
+                for first, second in pairs
+            ]
+        )
 
 
 def _prediction_vectors(
@@ -107,11 +129,135 @@ def _attribution_vectors(
     ablated_frame: pd.DataFrame = merged[
         [f"{column}_ablated" for column in label_columns]
     ].rename(columns={f"{column}_ablated": column for column in label_columns})
-    vectors: np.ndarray = _pair_vectors(original_frame, representation) - _pair_vectors(
-        ablated_frame, representation
-    )
+    with np.errstate(invalid="ignore"):
+        vectors: np.ndarray = _pair_vectors(
+            original_frame, representation
+        ) - _pair_vectors(ablated_frame, representation)
     index: pd.MultiIndex = pd.MultiIndex.from_frame(merged[["prompt_idx", "seg_idx"]])
     return pd.DataFrame(vectors, index=index)
+
+
+def _canonical_attribution(frame: pd.DataFrame, model: str) -> pd.DataFrame:
+    """Return answer-conditioned correct-vs-rest ablations for one model."""
+    rows: pd.DataFrame = frame[frame["model"] == model]
+    original: pd.DataFrame = rows[rows["kind"] == "orig"][
+        ["prompt_idx", "logodds"]
+    ].rename(columns={"logodds": "original"})
+    ablated: pd.DataFrame = rows[rows["kind"] == "ablated"][
+        ["prompt_idx", "seg_idx", "logodds"]
+    ].rename(columns={"logodds": "ablated"})
+    merged: pd.DataFrame = ablated.merge(
+        original,
+        on="prompt_idx",
+        how="inner",
+        validate="many_to_one",
+    )
+    index: pd.MultiIndex = pd.MultiIndex.from_frame(merged[["prompt_idx", "seg_idx"]])
+    with np.errstate(invalid="ignore"):
+        values: np.ndarray = (
+            merged["original"].to_numpy() - merged["ablated"].to_numpy()
+        )
+    return pd.DataFrame({"value": values}, index=index)
+
+
+def _segment_signal(
+    frame: pd.DataFrame,
+    model: str,
+    column: str,
+    allowed: set[tuple[int, int]] | None,
+) -> pd.DataFrame | None:
+    """Return one scalar white-box signal indexed by prompt and segment."""
+    rows: pd.DataFrame = frame[frame["model"] == model]
+    if rows.empty:
+        return None
+    index: pd.MultiIndex = pd.MultiIndex.from_frame(rows[["prompt_idx", "seg_idx"]])
+    if column == "alignment":
+        values: pd.Series = rows["w_dot_delta_z_postnorm"] / (
+            rows["w_norm"] * rows["delta_norm_postnorm"]
+        )
+    else:
+        values = rows[column]
+    signal: pd.DataFrame = pd.DataFrame(
+        {"value": values.to_numpy(dtype=float)}, index=index
+    )
+    if allowed is not None:
+        signal = signal[signal.index.isin(allowed)]
+    return None if signal["value"].isna().all() else signal
+
+
+def _append_rv_result(
+    output_rows: list[dict[str, str | float | int]],
+    first: pd.DataFrame,
+    second: pd.DataFrame,
+    *,
+    scope: str,
+    representation: str,
+    model_s: str,
+    model_t: str,
+    metric: str,
+    n_resamples: int,
+    confidence: float,
+    seed: int,
+    absolute_target: bool = False,
+    rng_scope: str | None = None,
+) -> None:
+    """Append one pair-specific RV estimate and prompt-cluster interval."""
+    target: pd.DataFrame = second.abs() if absolute_target else second
+    common: pd.Index = first.index.intersection(target.index)
+    expected_clusters: np.ndarray = np.asarray(
+        [index[0] if isinstance(index, tuple) else index for index in common]
+    )
+    x, y, clusters = _aligned(first, target)
+    rng: np.random.Generator = np.random.default_rng(
+        _analysis_seed(
+            seed,
+            representation,
+            metric,
+            rng_scope or scope,
+            model_s,
+            model_t,
+        )
+    )
+    point, low, high = _cluster_bootstrap_rv(
+        x,
+        y,
+        clusters,
+        n_resamples,
+        confidence,
+        rng,
+    )
+    expected_observations: int = len(common)
+    expected_prompts: int = len(np.unique(expected_clusters))
+    n_prompts: int = len(np.unique(clusters))
+    output_rows.append(
+        {
+            "benchmark": "race",
+            "pregrouper": "sentence",
+            "scope": scope,
+            "representation": representation,
+            "aggregation": "row_pooled",
+            "model_s": model_s,
+            "model_t": model_t,
+            "metric": metric,
+            "statistic": "rv",
+            "missingness_policy": "pair_specific_complete_case",
+            "expected_observations": expected_observations,
+            "n_observations": len(x),
+            "n_prompts": n_prompts,
+            "expected_prompts": expected_prompts,
+            "prompt_coverage": (
+                n_prompts / expected_prompts if expected_prompts else float("nan")
+            ),
+            "observation_coverage": (
+                len(x) / expected_observations
+                if expected_observations
+                else float("nan")
+            ),
+            "f_point": point,
+            "f_lo": low,
+            "f_hi": high,
+        }
+    )
 
 
 def _aligned(
@@ -140,42 +286,64 @@ def _cluster_bootstrap_rv(
     if len(x) < 3:
         return float("nan"), float("nan"), float("nan")
     point: float = _centered_rv(x, y)
-    unique_clusters: np.ndarray = np.unique(clusters)
-    grouped: list[
-        tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
-    ] = []
-    for cluster in unique_clusters:
-        mask: np.ndarray = clusters == cluster
-        xc: np.ndarray = x[mask]
-        yc: np.ndarray = y[mask]
-        grouped.append(
-            (
-                len(xc),
-                xc.sum(axis=0),
-                yc.sum(axis=0),
-                xc.T @ xc,
-                yc.T @ yc,
-                xc.T @ yc,
-            )
+    unique_clusters, cluster_inverse = np.unique(clusters, return_inverse=True)
+    n_clusters: int = len(unique_clusters)
+    counts: np.ndarray = np.bincount(cluster_inverse, minlength=n_clusters)
+
+    def grouped_sum(values: np.ndarray) -> np.ndarray:
+        return np.column_stack(
+            [
+                np.bincount(
+                    cluster_inverse,
+                    weights=values[:, column],
+                    minlength=n_clusters,
+                )
+                for column in range(values.shape[1])
+            ]
         )
-    counts: np.ndarray = np.asarray([group[0] for group in grouped])
-    sums_x: np.ndarray = np.stack([group[1] for group in grouped])
-    sums_y: np.ndarray = np.stack([group[2] for group in grouped])
-    sums_xx: np.ndarray = np.stack([group[3] for group in grouped])
-    sums_yy: np.ndarray = np.stack([group[4] for group in grouped])
-    sums_xy: np.ndarray = np.stack([group[5] for group in grouped])
+
+    def grouped_cross(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+        return np.stack(
+            [
+                grouped_sum(left * right[:, column : column + 1])
+                for column in range(right.shape[1])
+            ],
+            axis=2,
+        )
+
+    sums_x: np.ndarray = grouped_sum(x)
+    sums_y: np.ndarray = grouped_sum(y)
+    sums_xx: np.ndarray = grouped_cross(x, x)
+    sums_yy: np.ndarray = grouped_cross(y, y)
+    sums_xy: np.ndarray = grouped_cross(x, y)
     samples: list[float] = []
-    for _ in range(n_resamples):
-        chosen: np.ndarray = rng.integers(0, len(unique_clusters), len(unique_clusters))
-        n: int = int(counts[chosen].sum())
-        sum_x: np.ndarray = sums_x[chosen].sum(axis=0)
-        sum_y: np.ndarray = sums_y[chosen].sum(axis=0)
-        xx: np.ndarray = sums_xx[chosen].sum(axis=0) - np.outer(sum_x, sum_x) / n
-        yy: np.ndarray = sums_yy[chosen].sum(axis=0) - np.outer(sum_y, sum_y) / n
-        xy: np.ndarray = sums_xy[chosen].sum(axis=0) - np.outer(sum_x, sum_y) / n
-        denominator: float = float(np.sqrt(np.trace(xx @ xx) * np.trace(yy @ yy)))
-        if denominator > 0:
-            samples.append(float(np.trace(xy @ xy.T)) / denominator)
+    probabilities: np.ndarray = np.full(n_clusters, 1.0 / n_clusters)
+    batch_size: int = 100
+    for start in range(0, n_resamples, batch_size):
+        size: int = min(batch_size, n_resamples - start)
+        weights: np.ndarray = rng.multinomial(
+            n_clusters,
+            probabilities,
+            size=size,
+        )
+        n: np.ndarray = weights @ counts
+        sum_x: np.ndarray = weights @ sums_x
+        sum_y: np.ndarray = weights @ sums_y
+        xx: np.ndarray = np.tensordot(weights, sums_xx, axes=(1, 0)) - (
+            sum_x[:, :, None] * sum_x[:, None, :] / n[:, None, None]
+        )
+        yy: np.ndarray = np.tensordot(weights, sums_yy, axes=(1, 0)) - (
+            sum_y[:, :, None] * sum_y[:, None, :] / n[:, None, None]
+        )
+        xy: np.ndarray = np.tensordot(weights, sums_xy, axes=(1, 0)) - (
+            sum_x[:, :, None] * sum_y[:, None, :] / n[:, None, None]
+        )
+        numerator: np.ndarray = np.square(xy).sum(axis=(1, 2))
+        denominator: np.ndarray = np.sqrt(
+            np.square(xx).sum(axis=(1, 2)) * np.square(yy).sum(axis=(1, 2))
+        )
+        valid: np.ndarray = denominator > 0
+        samples.extend((numerator[valid] / denominator[valid]).tolist())
     alpha: float = (1.0 - confidence) / 2.0 * 100.0
     low, high = np.percentile(np.asarray(samples), [alpha, 100.0 - alpha])
     return point, float(low), float(high)
@@ -191,15 +359,32 @@ def _analysis_seed(seed: int, *parts: str) -> int:
 def compute_race_rv(
     logodds_path: str,
     manifest_path: str,
+    segments_path: str,
     scopes: list[str],
     n_resamples: int,
     confidence: float,
     seed: int,
     cohort: tuple[str, ...] | None = PAPER_MODELS,
 ) -> pd.DataFrame:
-    """Compute prediction and attribution RV for an explicit model cohort."""
+    """Compute black-box, white-box, and cross RACE RV fidelities."""
     frame: pd.DataFrame = pd.read_csv(logodds_path, sep="\t")
     manifest: pd.DataFrame = pd.read_csv(manifest_path, sep="\t")
+    segment_columns: set[str] = {
+        "model",
+        "prompt_idx",
+        "seg_idx",
+        "attention_mean",
+        "attention_max",
+        "attention_rollout",
+        "w_norm",
+        "delta_norm_postnorm",
+        "w_dot_delta_z_postnorm",
+    }
+    segments: pd.DataFrame = pd.read_csv(
+        segments_path,
+        sep="\t",
+        usecols=lambda column: column in segment_columns,
+    )
     missing_columns: set[str] = {f"label_lp_{label}" for label in LABELS} - set(
         frame.columns
     )
@@ -220,6 +405,10 @@ def compute_race_rv(
         )
     }
     output_rows: list[dict[str, str | float | int]] = []
+
+    canonical_attributions: dict[str, pd.DataFrame] = {
+        model: _canonical_attribution(frame, model) for model in models
+    }
 
     for representation in ("all_pairs", "anchor_a"):
         predictions: dict[str, pd.DataFrame] = {
@@ -250,73 +439,95 @@ def compute_race_rv(
                 model: values if allowed is None else values[values.index.isin(allowed)]
                 for model, values in attributions.items()
             }
-            expected_by_metric: dict[str, int] = {
-                "F_pred_rv": int(manifest["prompt_idx"].nunique()),
-                "F_attr_rv": len(manifest) if allowed is None else len(allowed),
-            }
-            expected_prompts_by_metric: dict[str, int] = {
-                "F_pred_rv": int(manifest["prompt_idx"].nunique()),
-                "F_attr_rv": int(
-                    manifest["prompt_idx"].nunique()
-                    if allowed is None
-                    else len({prompt_idx for prompt_idx, _ in allowed})
-                ),
-            }
             for metric, signals in (
                 ("F_pred_rv", predictions),
                 ("F_attr_rv", scoped_attrs),
             ):
                 for model_index, model_a in enumerate(models):
                     for model_b in models[model_index + 1 :]:
-                        x, y, clusters = _aligned(signals[model_a], signals[model_b])
                         bootstrap_scope: str = (
                             "prediction" if metric == "F_pred_rv" else scope
                         )
-                        rng: np.random.Generator = np.random.default_rng(
-                            _analysis_seed(
-                                seed,
-                                representation,
-                                metric,
-                                bootstrap_scope,
-                                model_a,
-                                model_b,
-                            )
+                        _append_rv_result(
+                            output_rows,
+                            signals[model_a],
+                            signals[model_b],
+                            scope=scope,
+                            representation=representation,
+                            model_s=model_a,
+                            model_t=model_b,
+                            metric=metric,
+                            n_resamples=n_resamples,
+                            confidence=confidence,
+                            seed=seed,
+                            rng_scope=bootstrap_scope,
                         )
-                        point, low, high = _cluster_bootstrap_rv(
-                            x,
-                            y,
-                            clusters,
-                            n_resamples,
-                            confidence,
-                            rng,
-                        )
-                        n_prompts: int = len(np.unique(clusters))
-                        expected_prompts: int = expected_prompts_by_metric[metric]
-                        output_rows.append(
-                            {
-                                "benchmark": "race",
-                                "pregrouper": "sentence",
-                                "scope": scope,
-                                "representation": representation,
-                                "aggregation": "row_pooled",
-                                "model_s": model_a,
-                                "model_t": model_b,
-                                "metric": metric,
-                                "statistic": "rv",
-                                "missingness_policy": "pair_specific_complete_case",
-                                "expected_observations": expected_by_metric[metric],
-                                "n_observations": len(x),
-                                "n_prompts": n_prompts,
-                                "expected_prompts": expected_prompts,
-                                "prompt_coverage": n_prompts / expected_prompts,
-                                "observation_coverage": (
-                                    len(x) / expected_by_metric[metric]
-                                ),
-                                "f_point": point,
-                                "f_lo": low,
-                                "f_hi": high,
-                            }
-                        )
+
+    representation_models: list[str] = list(models)
+    for scope in scopes:
+        allowed = None
+        if scope != "all":
+            scoped = manifest[manifest["message_role"] == scope]
+            allowed = {
+                (int(prompt_idx), int(seg_idx))
+                for prompt_idx, seg_idx in scoped[
+                    ["prompt_idx", "seg_idx"]
+                ].itertuples(index=False, name=None)
+            }
+        scalar_attributions: dict[str, pd.DataFrame] = {
+            model: (
+                values if allowed is None else values[values.index.isin(allowed)]
+            )
+            for model, values in canonical_attributions.items()
+        }
+        scalar_signals: dict[str, dict[str, pd.DataFrame]] = {}
+        for metric, column in SCALAR_METRIC_COLUMNS.items():
+            by_model: dict[str, pd.DataFrame] = {}
+            for model in representation_models:
+                signal: pd.DataFrame | None = _segment_signal(
+                    segments, model, column, allowed
+                )
+                if signal is not None:
+                    by_model[model] = signal
+            scalar_signals[metric] = by_model
+            for model_index, model_a in enumerate(by_model):
+                for model_b in list(by_model)[model_index + 1 :]:
+                    _append_rv_result(
+                        output_rows,
+                        by_model[model_a],
+                        by_model[model_b],
+                        scope=scope,
+                        representation="canonical_scalar",
+                        model_s=model_a,
+                        model_t=model_b,
+                        metric=metric,
+                        n_resamples=n_resamples,
+                        confidence=confidence,
+                        seed=seed,
+                    )
+        for metric, (column, absolute_target) in CROSS_METRICS.items():
+            source_metric: str = next(
+                name for name, candidate in SCALAR_METRIC_COLUMNS.items()
+                if candidate == column
+            )
+            for model_s, source in scalar_signals[source_metric].items():
+                for model_t, target in scalar_attributions.items():
+                    if model_s == model_t:
+                        continue
+                    _append_rv_result(
+                        output_rows,
+                        source,
+                        target,
+                        scope=scope,
+                        representation="canonical_scalar",
+                        model_s=model_s,
+                        model_t=model_t,
+                        metric=metric,
+                        n_resamples=n_resamples,
+                        confidence=confidence,
+                        seed=seed,
+                        absolute_target=absolute_target,
+                    )
     return pd.DataFrame(output_rows)
 
 
@@ -346,9 +557,11 @@ def main() -> None:
     manifest_path: str = os.path.join(
         args.results_dir, "race", "sentence", "segments.tsv.gz"
     )
+    segments_path: str = os.path.join(args.results_dir, "race_sentence_segments.tsv")
     result: pd.DataFrame = compute_race_rv(
         logodds_path,
         manifest_path,
+        segments_path,
         args.scopes,
         args.bootstrap_resamples,
         args.confidence_level,
@@ -369,12 +582,18 @@ def main() -> None:
             args.results_dir,
             "race",
             "sentence",
-            {"logodds": logodds_path, "manifest": manifest_path},
+            {
+                "logodds": logodds_path,
+                "manifest": manifest_path,
+                "segments": segments_path,
+            },
             cohorts[args.cohort],
         ),
         parameters={
             "scopes": list(args.scopes),
             "representations": ["all_pairs", "anchor_a"],
+            "scalar_representation": "canonical_scalar",
+            "scalar_attribution": "correct_vs_rest",
             "bootstrap_resamples": args.bootstrap_resamples,
             "confidence_level": args.confidence_level,
             "seed": args.seed,

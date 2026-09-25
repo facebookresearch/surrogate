@@ -3977,6 +3977,8 @@ def _validate_derived_outputs(
     expected_race_parameters: dict[str, Any] = {
         "scopes": ["user"],
         "representations": ["all_pairs", "anchor_a"],
+        "scalar_representation": "canonical_scalar",
+        "scalar_attribution": "correct_vs_rest",
         "bootstrap_resamples": 1000,
         "confidence_level": 0.95,
         "seed": 42,
@@ -4003,6 +4005,35 @@ def _validate_derived_outputs(
         for model_s, model_t in itertools.combinations(models, 2)
         for metric in ("F_pred_rv", "F_attr_rv")
     }
+    race_open_models: tuple[str, ...] = tuple(
+        model for model in OPEN_MODELS if model in models
+    )
+    scalar_metrics: tuple[str, ...] = (
+        "F_attn_mean_rv",
+        "F_attn_max_rv",
+        "F_attn_rollout_rv",
+        "F_mag_rv",
+        "F_align_rv",
+    )
+    cross_metrics: tuple[str, ...] = (
+        "F_attn_mean_to_attr_rv",
+        "F_attn_max_to_attr_rv",
+        "F_attn_rollout_to_attr_rv",
+        "F_mag_to_attr_rv",
+        "F_align_to_attr_rv",
+    )
+    expected_race_keys.update(
+        ("user", "canonical_scalar", model_s, model_t, metric)
+        for model_s, model_t in itertools.combinations(race_open_models, 2)
+        for metric in scalar_metrics
+    )
+    expected_race_keys.update(
+        ("user", "canonical_scalar", model_s, model_t, metric)
+        for model_s in race_open_models
+        for model_t in models
+        if model_s != model_t
+        for metric in cross_metrics
+    )
     actual_race_keys: set[tuple[str, str, str, str, str]] = set(
         race[["scope", "representation", "model_s", "model_t", "metric"]].itertuples(
             index=False, name=None

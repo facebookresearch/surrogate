@@ -138,8 +138,9 @@ class TestDerivedProvenance(TestCase):
             config_dir: str = os.path.join(results_dir, "race", "sentence")
             os.makedirs(config_dir)
             logodds_path: str = os.path.join(results_dir, "race_sentence_logodds.tsv")
+            segments_path: str = os.path.join(results_dir, "race_sentence_segments.tsv")
             manifest_path: str = os.path.join(config_dir, "segments.tsv.gz")
-            for path in (logodds_path, manifest_path):
+            for path in (logodds_path, segments_path, manifest_path):
                 with open(path, "w", encoding="utf-8") as output:
                     output.write("fixture\n")
             for name in (

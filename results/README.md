@@ -131,10 +131,20 @@ contrasts, and aggregation. It differs only by replacing hosted infinities just
 outside each signal's finite range when such a range exists. Missing requests
 remain missing. This is a sensitivity analysis, not the primary estimate.
 
-`race_rv.tsv` treats RACE as a multivariate four-label problem. It reports the
-centered RV coefficient for prediction and attribution vectors over the six
-pairwise A-D margins. Hosted comparisons use model-pair-specific finite
-complete cases with explicit observation and prompt coverage.
+The paper-facing cross-benchmark table omits LAMBADA because GPT-4o, GPT-4.1,
+and Gemini do not reliably expose the teacher-forced target-token log
+probabilities required by this task. The partial public measurements remain in
+`f_table.tsv` with explicit availability and coverage metadata.
+
+`race_rv.tsv` treats RACE as a multivariate four-label problem. Prediction and
+attribution use centered RV over the six pairwise A--D margins. The scalar
+attention, perturbation-magnitude, and answer-conditioned alignment signals use
+centered RV on the canonical correct-vs-rest contrast; in one dimension this is
+exactly Pearson r-squared. Mechanistic-to-attribution rows likewise compare the
+scalar mechanistic signal with the target model's correct-vs-rest ablation
+(absolute-valued for the unsigned magnitude metric). Hosted comparisons use
+model-pair-specific finite complete cases with explicit observation and prompt
+coverage.
 
 `layerwise_fidelity.tsv` reports open-model `F_pred` and signed `F_attr` at
 matched relative decoder depth for BoolQ and ANLI R1-R3. Its compact raw layer
