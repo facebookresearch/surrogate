@@ -252,7 +252,7 @@ python -m benchmark_scripts.plot_layer_controls \
 The headline plot reports per-layer grouped-logsumexp `F_pred`, signed
 `F_attr`, and the grouped 9-vs-8 readout-compatible control. Target ribbons are
 95% prompt-cluster bootstrap intervals; the control ribbon is the empirical
-2.5--97.5% range across directions, not a confidence interval. Pairwise R²
+2.5--97.5% range across directions, not a confidence interval. Pairwise r²
 values are averaged over the ten open-model pairs and must not be interpreted
 additively. Relative depth excludes the embedding slot by default;
 `analyze_layer_controls --include-embedding` provides an explicit all-slot

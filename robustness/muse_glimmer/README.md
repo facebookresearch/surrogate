@@ -27,7 +27,7 @@ applies a nonlinear softcap, so fixed-unembedding representation projections
 are retained in the raw segment artifact as diagnostics but are deliberately
 excluded from this headline extension table.
 
-Across the eleven reference models, the median Pearson R-squared is 0.735 for
+Across the eleven reference models, the median Pearson r-squared is 0.735 for
 `F_pred` and 0.557 for `F_attr`. Prediction fidelity exceeds attribution
 fidelity for every pair (median gap 0.176). The table contains the per-pair
 estimates, confidence intervals, and complete-case coverage.

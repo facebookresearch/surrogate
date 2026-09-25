@@ -473,7 +473,7 @@ def plot_summary(summary_path: str, output_path: str) -> None:
         axis.set_ylim(0.0, 1.0)
         axis.set_xticks([0.0, 0.25, 0.5, 0.75, 1.0])
         axis.set_xlabel("Relative decoder depth")
-        axis.set_ylabel(r"Mean pairwise Pearson $R^2$")
+        axis.set_ylabel(r"Mean pairwise Pearson $r^2$")
         figure.subplots_adjust(left=0.20, right=0.96, top=0.98, bottom=0.20)
         try:
             _save_figure(figure, output_path, output_format)

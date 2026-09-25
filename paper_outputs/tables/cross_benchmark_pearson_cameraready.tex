@@ -1,0 +1,23 @@
+% User-segment canonical medians. Binary/completion columns: Pearson r^2; RACE: centered RV.
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccc}
+\toprule
+Metric & BoolQ & ANLI R1 & ANLI R2 & ANLI R3 & WinoGrande & BoolQ word & LAMBADA & RACE RV \\
+\midrule
+$F_{\mathrm{pred}}$ & .718 & .317 & .264 & .333 & .224 & .719 & .155 & .751 \\
+$F_{\mathrm{attr}}$ & .514 & .140 & .131 & .197 & .170 & .218 & .258 & .381 \\
+$F_{\mathrm{attn}}^{\mathrm{mean}}$ & .968 & .960 & .959 & .960 & .943 & .777 & .543 & --- \\
+$F_{\mathrm{attn}}^{\mathrm{max}}$ & .864 & .846 & .834 & .826 & .684 & .325 & .275 & --- \\
+$F_{\mathrm{attn}}^{\mathrm{rollout}}$ & .802 & .923 & .921 & .910 & .940 & .729 & .864 & --- \\
+$F_{\mathrm{mag}}$ & .700 & .595 & .588 & .630 & .235 & .514 & .487 & --- \\
+$F_{\mathrm{align}}$ & .243 & .128 & .141 & .111 & .034 & .022 & .026 & --- \\
+$F_{\mathrm{mag}\to|\mathrm{attr}|}$ & .514 & .278 & .274 & .304 & .012 & .300 & .230 & --- \\
+$F_{\mathrm{align}\to\mathrm{attr}}$ & .297 & .098 & .096 & .111 & .049 & .039 & .057 & --- \\
+$F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{mean}}$ & .002 & .022 & .018 & .042 & .010 & .011 & .156 & --- \\
+$F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{max}}$ & .003 & .019 & .018 & .026 & .008 & .009 & .158 & --- \\
+$F_{\mathrm{attn}\to\mathrm{attr}}^{\mathrm{rollout}}$ & .002 & .004 & .005 & .004 & .007 & .000 & .008 & --- \\
+\bottomrule
+\end{tabular}%
+}
+\par\smallskip
+{\footnotesize LAMBADA coverage is 28/55 black-box pairs and 35/50 mechanistic-to-causal pairs (representation-level: 10/10). RACE reports all 55 model pairs with pair-specific observation coverage from 14.9\% to 100\%.}
