@@ -61,6 +61,7 @@ class _FakeAxis:
         self.plots: list[dict[str, Any]] = []
         self.bands: list[dict[str, Any]] = []
         self.annotations: list[tuple[str, dict[str, Any]]] = []
+        self.ylim: tuple[float, float] | None = None
 
     def plot(self, *_args: Any, **kwargs: Any) -> list[object]:
         self.plots.append(kwargs)
@@ -77,8 +78,8 @@ class _FakeAxis:
     def set_xlim(self, *_args: Any) -> None:
         pass
 
-    def set_ylim(self, *_args: Any) -> None:
-        pass
+    def set_ylim(self, lower: float, upper: float) -> None:
+        self.ylim = (lower, upper)
 
     def set_xlabel(self, *_args: Any) -> None:
         pass
@@ -224,7 +225,8 @@ class PlotLayerControlsTest(TestCase):
             {text for text, _kwargs in fake_pyplot.axis.annotations},
             {r"$F_{\mathrm{pred}}$", r"$F_{\mathrm{attr}}$", "Control"},
         )
-        self.assertEqual(fake_pyplot.subplots_kwargs["figsize"], (2.75, 2.15))
+        self.assertEqual(fake_pyplot.subplots_kwargs["figsize"], (2.75, 1.35))
+        self.assertEqual(fake_pyplot.axis.ylim, (0.0, 0.8))
         self.assertTrue(fake_pyplot.defaults_reset)
         self.assertEqual(fake_pyplot.rcParams["font.family"], "serif")
         self.assertEqual(

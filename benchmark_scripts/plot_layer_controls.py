@@ -41,7 +41,7 @@ _OBSERVATION_CONTROL: str = "observation_pair_permutation"
 _GAP: str = "prediction_minus_attribution_gap"
 
 _COLOR_PRED: str = "#584486"
-_COLOR_ATTR: str = "#0E9AAB"
+_COLOR_ATTR: str = "#0091A1"
 _COLOR_CONTROL: str = "#9A958F"
 
 
@@ -408,7 +408,7 @@ def plot_summary(summary_path: str, output_path: str) -> None:
         pyplot.rcParams.update(style)
         # ICLR uses a 5.5-inch single-column text block. The paper currently
         # places this plot in a 0.5\textwidth wrapfigure.
-        figure, axis = pyplot.subplots(figsize=(2.75, 2.15))
+        figure, axis = pyplot.subplots(figsize=(2.75, 1.35))
 
         _plot_target(
             axis,
@@ -469,12 +469,19 @@ def plot_summary(summary_path: str, output_path: str) -> None:
                 arrowprops={"arrowstyle": "-", "color": color, "linewidth": 0.8},
             )
 
+        prediction_upper: float = float(
+            max(
+                data.series[_column(_PREDICTION, _TARGET_POINT_SUFFIX)].max(),
+                data.series[_column(_PREDICTION, _TARGET_UPPER_SUFFIX)].max(),
+            )
+        )
+        y_max: float = min(1.0, float(np.ceil((prediction_upper + 0.03) * 10.0) / 10.0))
         axis.set_xlim(0.0, 1.18)
-        axis.set_ylim(0.0, 1.0)
+        axis.set_ylim(0.0, y_max)
         axis.set_xticks([0.0, 0.25, 0.5, 0.75, 1.0])
         axis.set_xlabel("Relative decoder depth")
-        axis.set_ylabel(r"Mean pairwise Pearson $r^2$")
-        figure.subplots_adjust(left=0.20, right=0.96, top=0.98, bottom=0.20)
+        axis.set_ylabel(r"Mean pairwise $r^2$")
+        figure.subplots_adjust(left=0.20, right=0.96, top=0.98, bottom=0.28)
         try:
             _save_figure(figure, output_path, output_format)
         finally:
