@@ -11,10 +11,28 @@ import numpy as np
 import pandas as pd
 
 from benchmark_scripts.anli_rv import _pair_vectors
-from benchmark_scripts.rv import centered_rv
+from benchmark_scripts.rv import centered_rv, replace_censored_label_logprobs
 
 
 class TestAnliRV(TestCase):
+    def test_finite_extreme_preserves_all_label_missing_rows(self) -> None:
+        values: np.ndarray = np.asarray(
+            [
+                [-1.0, -np.inf, -3.0],
+                [-np.inf, -np.inf, -np.inf],
+                [np.nan, np.nan, np.nan],
+                [-2.0, -4.0, -np.inf],
+            ]
+        )
+
+        result: np.ndarray = replace_censored_label_logprobs(values)
+
+        self.assertAlmostEqual(result[0, 1], -4.05)
+        self.assertAlmostEqual(result[3, 2], -4.05)
+        self.assertTrue(np.isnan(result[1]).all())
+        self.assertTrue(np.isnan(result[2]).all())
+        self.assertTrue(np.isneginf(values[0, 1]))
+
     def test_pair_vector_order(self) -> None:
         frame: pd.DataFrame = pd.DataFrame(
             [

@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from benchmark_scripts.race_rv import (
+    _apply_missingness_policy,
     _aligned,
     _attribution_vectors,
     _canonical_attribution,
@@ -23,6 +24,44 @@ from benchmark_scripts.race_rv import (
 
 
 class TestRaceRV(TestCase):
+    def test_missingness_policy_rebuilds_correct_vs_rest_logodds(self) -> None:
+        frame: pd.DataFrame = pd.DataFrame(
+            [
+                {
+                    "model": "m",
+                    "answer": "A",
+                    "label_lp_a": -1.0,
+                    "label_lp_b": -2.0,
+                    "label_lp_c": -np.inf,
+                    "label_lp_d": -4.0,
+                    "logodds": np.inf,
+                },
+                {
+                    "model": "m",
+                    "answer": "B",
+                    "label_lp_a": -np.inf,
+                    "label_lp_b": -np.inf,
+                    "label_lp_c": -np.inf,
+                    "label_lp_d": -np.inf,
+                    "logodds": np.nan,
+                },
+            ]
+        )
+
+        result: pd.DataFrame = _apply_missingness_policy(frame)
+        expected: float = -1.0 - float(
+            np.logaddexp.reduce(np.asarray([-2.0, -4.05, -4.0]))
+        )
+
+        self.assertAlmostEqual(result.loc[0, "label_lp_c"], -4.05)
+        self.assertAlmostEqual(result.loc[0, "logodds"], expected)
+        self.assertTrue(
+            result.loc[1, ["label_lp_a", "label_lp_b", "label_lp_c", "label_lp_d"]]
+            .isna()
+            .all()
+        )
+        self.assertTrue(np.isnan(result.loc[1, "logodds"]))
+
     def test_identical_matrices_have_unit_rv(self) -> None:
         values = np.asarray([[0.0, 1.0], [1.0, 0.0], [2.0, 3.0]])
         self.assertAlmostEqual(_centered_rv(values, values), 1.0)
@@ -116,6 +155,7 @@ class TestRaceRV(TestCase):
                         "prompt_idx": prompt_idx,
                         "seg_idx": np.nan,
                         "kind": "orig",
+                        "answer": "A",
                         "label_lp_a": base + 0.1 * prompt_idx,
                         "label_lp_b": -base,
                         "label_lp_c": 0.5 * base,
@@ -142,6 +182,7 @@ class TestRaceRV(TestCase):
                             "prompt_idx": prompt_idx,
                             "seg_idx": seg_idx,
                             "kind": "ablated",
+                            "answer": "A",
                             "label_lp_a": base - 0.2 * (seg_idx + 1),
                             "label_lp_b": -base + 0.1 * prompt_idx,
                             "label_lp_c": 0.5 * base - 0.05 * seg_idx,
@@ -152,9 +193,7 @@ class TestRaceRV(TestCase):
 
         for row in rows:
             if row["kind"] == "orig":
-                row["logodds"] = float(row["label_lp_a"]) - float(
-                    row["label_lp_b"]
-                )
+                row["logodds"] = float(row["label_lp_a"]) - float(row["label_lp_b"])
 
         with tempfile.TemporaryDirectory() as directory:
             logodds_path: str = os.path.join(directory, "race.tsv")

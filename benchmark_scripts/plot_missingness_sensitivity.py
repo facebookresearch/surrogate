@@ -24,7 +24,13 @@ from benchmark_scripts.derived_provenance import (
     derived_supporting_source_paths,
     write_derived_provenance,
 )
-from benchmark_scripts.rv import centered_rv
+from benchmark_scripts.rv import (
+    FINITE_EXTREME_ABSOLUTE_MARGIN,
+    FINITE_EXTREME_RELATIVE_MARGIN,
+    centered_rv,
+    finite_extreme_offset,
+    replace_censored_label_logprobs,
+)
 
 OFFSETS: tuple[float, ...] = (0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0)
 LABELS: dict[str, tuple[str, ...]] = {
@@ -45,17 +51,13 @@ COLORS: dict[str, str] = {
 def _floor_missing_labels(
     frame: pd.DataFrame, label_columns: list[str], offset: float
 ) -> pd.DataFrame:
-    """Replace negative infinities with one symmetric model-level floor."""
+    """Apply a fixed floor to partial censoring while preserving empty rows."""
     output: pd.DataFrame = frame.copy()
-    for model, indices in output.groupby("model", sort=False).groups.items():
-        values: np.ndarray = output.loc[indices, label_columns].to_numpy(dtype=float)
-        finite: np.ndarray = values[np.isfinite(values)]
-        if finite.size == 0:
-            continue
-        floor: float = float(finite.min() - offset)
-        output.loc[indices, label_columns] = output.loc[
-            indices, label_columns
-        ].replace(-np.inf, floor)
+    for indices in output.groupby("model", sort=False).groups.values():
+        output.loc[indices, label_columns] = replace_censored_label_logprobs(
+            output.loc[indices, label_columns].to_numpy(dtype=float),
+            offset=offset,
+        )
     return output
 
 
@@ -131,15 +133,14 @@ def compute_sensitivity(results_dir: str) -> pd.DataFrame:
         policy_offsets: dict[str, float] = {}
         for model, indices in frame.groupby("model", sort=False).groups.items():
             values: np.ndarray = frame.loc[indices, label_columns].to_numpy(dtype=float)
-            finite: np.ndarray = values[np.isfinite(values)]
-            policy_offsets[str(model)] = float(abs(finite.min()) * 0.01 + 0.01)
+            policy_offset: float | None = finite_extreme_offset(values)
+            if policy_offset is None:
+                raise ValueError(f"{benchmark}/{model} has no finite label scores")
+            policy_offsets[str(model)] = policy_offset
         for offset in OFFSETS:
-            floored: pd.DataFrame = _floor_missing_labels(
-                frame, label_columns, offset
-            )
+            floored: pd.DataFrame = _floor_missing_labels(frame, label_columns, offset)
             by_model: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
-                model: _signals(floored, model, labels)
-                for model in PAPER_MODELS
+                model: _signals(floored, model, labels) for model in PAPER_MODELS
             }
             for model_s, model_t in itertools.combinations(PAPER_MODELS, 2):
                 for metric, position in (("F_pred", 0), ("F_attr", 1)):
@@ -163,7 +164,7 @@ def compute_sensitivity(results_dir: str) -> pd.DataFrame:
 
 
 def reference_values(results_dir: str) -> dict[str, dict[str, float]]:
-    """Load canonical complete-case and representation reference medians."""
+    """Load canonical multiclass and representation reference medians."""
     f_table: pd.DataFrame = pd.read_csv(
         os.path.join(results_dir, "f_table.tsv"), sep="\t"
     )
@@ -179,37 +180,47 @@ def reference_values(results_dir: str) -> dict[str, dict[str, float]]:
         & f_table["scope"].eq("all")
         & f_table["statistic"].eq("pearson_r2")
     ]
-    anli_complete: pd.DataFrame = anli_rv[anli_rv["scope"].eq("all")]
+    anli_canonical: pd.DataFrame = anli_rv[anli_rv["scope"].eq("all")]
     references["ANLI"] = {
         "F_pred_complete": float(
-            anli_complete.loc[anli_complete["metric"].eq("F_pred_rv"), "f_point"].median()
+            anli_canonical.loc[
+                anli_canonical["metric"].eq("F_pred_rv"), "f_point"
+            ].median()
         ),
         "F_attr_complete": float(
-            anli_complete.loc[anli_complete["metric"].eq("F_attr_rv"), "f_point"].median()
+            anli_canonical.loc[
+                anli_canonical["metric"].eq("F_attr_rv"), "f_point"
+            ].median()
         ),
         **{
-            metric: float(anli_scalar.loc[anli_scalar["metric"].eq(metric), "f_point"].median())
+            metric: float(
+                anli_scalar.loc[anli_scalar["metric"].eq(metric), "f_point"].median()
+            )
             for metric in ("F_attn_mean", "F_mag", "F_align")
         },
     }
     race_scalar: pd.DataFrame = race_rv[
-        race_rv["scope"].eq("all")
-        & race_rv["representation"].eq("canonical_scalar")
+        race_rv["scope"].eq("all") & race_rv["representation"].eq("canonical_scalar")
     ]
-    race_complete: pd.DataFrame = race_rv[
-        race_rv["scope"].eq("all")
-        & race_rv["representation"].eq("all_pairs")
+    race_canonical: pd.DataFrame = race_rv[
+        race_rv["scope"].eq("all") & race_rv["representation"].eq("all_pairs")
     ]
     references["RACE"] = {
         "F_pred_complete": float(
-            race_complete.loc[race_complete["metric"].eq("F_pred_rv"), "f_point"].median()
+            race_canonical.loc[
+                race_canonical["metric"].eq("F_pred_rv"), "f_point"
+            ].median()
         ),
         "F_attr_complete": float(
-            race_complete.loc[race_complete["metric"].eq("F_attr_rv"), "f_point"].median()
+            race_canonical.loc[
+                race_canonical["metric"].eq("F_attr_rv"), "f_point"
+            ].median()
         ),
         **{
             output_name: float(
-                race_scalar.loc[race_scalar["metric"].eq(input_name), "f_point"].median()
+                race_scalar.loc[
+                    race_scalar["metric"].eq(input_name), "f_point"
+                ].median()
             )
             for output_name, input_name in (
                 ("F_attn_mean", "F_attn_mean_rv"),
@@ -288,7 +299,9 @@ def plot_sensitivity(
             zorder=1,
         )
         for metric in ("F_pred", "F_attr"):
-            grouped = panel[panel["metric"].eq(metric)].groupby("floor_offset")["f_point"]
+            grouped = panel[panel["metric"].eq(metric)].groupby("floor_offset")[
+                "f_point"
+            ]
             median: pd.Series = grouped.median()
             axis.plot(x_values, median.values, color=COLORS[metric])
             axis.fill_between(
@@ -340,20 +353,11 @@ def plot_sensitivity(
         axis.set_title(title)
         axis.set_xticks(x_values, [str(int(offset)) for offset in OFFSETS])
         axis.set_xlim(-0.2, x_values[-1] + 0.9)
-        axis.set_ylim(0.0, 1.0)
+        axis.set_ylim(-0.05, 1.0)
         axis.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel(r"Median fidelity ($r^2$ or RV)")
     fig.supxlabel("Floor offset below observed minimum (nats)", fontsize=8, y=0.01)
-    fig.text(
-        0.5,
-        0.965,
-        "Dashed horizontal: complete cases; gray vertical: current finite-extreme rule",
-        ha="center",
-        va="top",
-        fontsize=6.5,
-        color="#555555",
-    )
-    fig.tight_layout(w_pad=1.4, rect=(0, 0.07, 1, 0.94))
+    fig.tight_layout(w_pad=1.4, rect=(0, 0.07, 1, 1))
     os.makedirs(os.path.dirname(output), exist_ok=True)
     fig.savefig(
         output,
@@ -370,7 +374,9 @@ def plot_sensitivity(
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default="results")
-    parser.add_argument("--output-table", default="results/multiclass_floor_sensitivity.tsv")
+    parser.add_argument(
+        "--output-table", default="results/multiclass_floor_sensitivity.tsv"
+    )
     parser.add_argument(
         "--output-figure",
         default="figures/0625_cameraready/appendix_multiclass_floor_sensitivity.pdf",
@@ -412,7 +418,10 @@ def main() -> None:
             "scope": "all",
             "floor_offsets_nats": list(OFFSETS),
             "floor_reference": "model_benchmark_minimum_finite_label_logprob",
-            "missing_value": "negative_infinity_only",
+            "missing_value": "partial_negative_infinity_only",
+            "all_labels_missing": "nan",
+            "finite_extreme_relative_margin": FINITE_EXTREME_RELATIVE_MARGIN,
+            "finite_extreme_absolute_margin": FINITE_EXTREME_ABSOLUTE_MARGIN,
             "cohort": "paper",
             "summary": "median_and_interquartile_model_pair_range",
         },

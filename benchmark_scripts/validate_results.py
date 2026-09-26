@@ -102,6 +102,11 @@ from benchmark_scripts.provenance_sources import (
     OPEN_MODEL_IDENTITY_FILENAMES,
     canonical_file_hash_manifest_sha256,
 )
+from benchmark_scripts.rv import (
+    FINITE_EXTREME_ABSOLUTE_MARGIN,
+    FINITE_EXTREME_MISSINGNESS_POLICY,
+    FINITE_EXTREME_RELATIVE_MARGIN,
+)
 from surrogate.eval_constants import label_column_alias
 
 ARTIFACT_CONFIGS: list[tuple[str, str]] = [
@@ -450,6 +455,10 @@ F_TABLE_DERIVED_SUPPORTING_SOURCE_FILES: tuple[str, ...] = (
     "benchmark_scripts/layerwise_fidelity.py",
 )
 ANLI_RV_DERIVED_SUPPORTING_SOURCE_FILES: tuple[str, ...] = (
+    *DERIVED_SUPPORTING_SOURCE_FILES,
+    "benchmark_scripts/rv.py",
+)
+RACE_RV_DERIVED_SUPPORTING_SOURCE_FILES: tuple[str, ...] = (
     *DERIVED_SUPPORTING_SOURCE_FILES,
     "benchmark_scripts/rv.py",
 )
@@ -3990,7 +3999,9 @@ def _validate_derived_outputs(
         "confidence_level": 0.95,
         "seed": 42,
         "cohort": cohort_name,
-        "missingness_policy": "pair_specific_complete_case",
+        "missingness_policy": FINITE_EXTREME_MISSINGNESS_POLICY,
+        "finite_extreme_relative_margin": FINITE_EXTREME_RELATIVE_MARGIN,
+        "finite_extreme_absolute_margin": FINITE_EXTREME_ABSOLUTE_MARGIN,
     }
     if parameters != expected_anli_parameters:
         raise ValueError(f"Incorrect ANLI RV derivation parameters in {anli_path}")
@@ -4010,7 +4021,7 @@ def _validate_derived_outputs(
         or not anli["scope"].eq("all").all()
         or not anli["representation"].eq("all_pairwise_log_odds").all()
         or not anli["statistic"].eq("rv").all()
-        or not anli["missingness_policy"].eq("pair_specific_complete_case").all()
+        or not anli["missingness_policy"].eq(FINITE_EXTREME_MISSINGNESS_POLICY).all()
         or not anli["aggregation"].eq("row_pooled").all()
     ):
         raise ValueError(f"{anli_path} has an incorrect ANLI result grid or metadata")
@@ -4024,6 +4035,7 @@ def _validate_derived_outputs(
         "benchmark_scripts.race_rv",
         [("race", "sentence")],
         models,
+        supporting_source_files=RACE_RV_DERIVED_SUPPORTING_SOURCE_FILES,
     )
     expected_race_parameters: dict[str, Any] = {
         "scopes": ["all"],
@@ -4036,7 +4048,9 @@ def _validate_derived_outputs(
         "cohort": cohort_name,
         "requested_models": list(models),
         "output_models": sorted(models),
-        "missingness_policy": "pair_specific_complete_case",
+        "missingness_policy": FINITE_EXTREME_MISSINGNESS_POLICY,
+        "finite_extreme_relative_margin": FINITE_EXTREME_RELATIVE_MARGIN,
+        "finite_extreme_absolute_margin": FINITE_EXTREME_ABSOLUTE_MARGIN,
     }
     if parameters != expected_race_parameters:
         raise ValueError(f"Incorrect RACE RV derivation parameters in {race_path}")
@@ -4095,7 +4109,7 @@ def _validate_derived_outputs(
     if (
         set(race["statistic"].astype(str)) != {"rv"}
         or set(race["missingness_policy"].astype(str))
-        != {"pair_specific_complete_case"}
+        != {FINITE_EXTREME_MISSINGNESS_POLICY}
         or set(race["aggregation"].astype(str)) != {"row_pooled"}
     ):
         raise ValueError(f"{race_path} has incorrect RACE method metadata")

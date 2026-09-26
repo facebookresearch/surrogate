@@ -7,9 +7,9 @@
 
 """Compute RACE fidelity with centered RV coefficients.
 
-Hosted top-k outputs follow the paper Figure 13 implementation: each model pair
-is evaluated on rows where all six pairwise margins are finite for both models.
-Coverage is emitted explicitly because these complete cases are pair-specific.
+Partially censored hosted top-k rows use a model-specific finite floor. Rows
+with no observed class score remain unavailable rather than becoming an
+artificial zero-margin observation.
 
 Prediction and attribution use the six pairwise A--D margins. Representation
 metrics use their scalar segment signals, and representation-to-attribution
@@ -36,6 +36,12 @@ from benchmark_scripts.derived_provenance import (
     write_derived_provenance,
 )
 from benchmark_scripts.f_table import OPEN_MODELS, PAPER_MODELS
+from benchmark_scripts.rv import (
+    FINITE_EXTREME_ABSOLUTE_MARGIN,
+    FINITE_EXTREME_MISSINGNESS_POLICY,
+    FINITE_EXTREME_RELATIVE_MARGIN,
+    replace_censored_label_logprobs,
+)
 
 LABELS: tuple[str, ...] = ("a", "b", "c", "d")
 SCALAR_METRIC_COLUMNS: dict[str, str] = {
@@ -52,6 +58,37 @@ CROSS_METRICS: dict[str, tuple[str, bool]] = {
     "F_mag_to_attr_rv": ("delta_norm_postnorm", True),
     "F_align_to_attr_rv": ("alignment", False),
 }
+
+
+def _apply_missingness_policy(frame: pd.DataFrame) -> pd.DataFrame:
+    """Apply finite floors and rebuild the answer-conditioned scalar score."""
+    output: pd.DataFrame = frame.copy()
+    label_columns: list[str] = [f"label_lp_{label}" for label in LABELS]
+    for indices in output.groupby("model", sort=False).groups.values():
+        output.loc[indices, label_columns] = replace_censored_label_logprobs(
+            output.loc[indices, label_columns].to_numpy(dtype=float)
+        )
+
+    answer_indices: pd.Series = (
+        output["answer"]
+        .astype(str)
+        .str.lower()
+        .map({label: index for index, label in enumerate(LABELS)})
+    )
+    if answer_indices.isna().any():
+        unknown: list[str] = sorted(
+            output.loc[answer_indices.isna(), "answer"].astype(str).unique()
+        )
+        raise ValueError(f"Unknown RACE answers {unknown}")
+    values: np.ndarray = output[label_columns].to_numpy(dtype=float)
+    row_indices: np.ndarray = np.arange(len(output))
+    correct_indices: np.ndarray = answer_indices.to_numpy(dtype=int)
+    correct: np.ndarray = values[row_indices, correct_indices]
+    alternatives: np.ndarray = values.copy()
+    alternatives[row_indices, correct_indices] = -np.inf
+    with np.errstate(invalid="ignore"):
+        output["logodds"] = correct - np.logaddexp.reduce(alternatives, axis=1)
+    return output
 
 
 def _rv(x: np.ndarray, y: np.ndarray) -> float:
@@ -240,7 +277,7 @@ def _append_rv_result(
             "model_t": model_t,
             "metric": metric,
             "statistic": "rv",
-            "missingness_policy": "pair_specific_complete_case",
+            "missingness_policy": FINITE_EXTREME_MISSINGNESS_POLICY,
             "expected_observations": expected_observations,
             "n_observations": len(x),
             "n_prompts": n_prompts,
@@ -390,6 +427,7 @@ def compute_race_rv(
     )
     if missing_columns:
         raise ValueError(f"Missing RACE label columns {sorted(missing_columns)}")
+    frame = _apply_missingness_policy(frame)
     available: set[str] = set(frame["model"].dropna().astype(str))
     if cohort is not None:
         missing_models: set[str] = set(cohort) - available
@@ -470,14 +508,12 @@ def compute_race_rv(
             scoped = manifest[manifest["message_role"] == scope]
             allowed = {
                 (int(prompt_idx), int(seg_idx))
-                for prompt_idx, seg_idx in scoped[
-                    ["prompt_idx", "seg_idx"]
-                ].itertuples(index=False, name=None)
+                for prompt_idx, seg_idx in scoped[["prompt_idx", "seg_idx"]].itertuples(
+                    index=False, name=None
+                )
             }
         scalar_attributions: dict[str, pd.DataFrame] = {
-            model: (
-                values if allowed is None else values[values.index.isin(allowed)]
-            )
+            model: (values if allowed is None else values[values.index.isin(allowed)])
             for model, values in canonical_attributions.items()
         }
         scalar_signals: dict[str, dict[str, pd.DataFrame]] = {}
@@ -507,7 +543,8 @@ def compute_race_rv(
                     )
         for metric, (column, absolute_target) in CROSS_METRICS.items():
             source_metric: str = next(
-                name for name, candidate in SCALAR_METRIC_COLUMNS.items()
+                name
+                for name, candidate in SCALAR_METRIC_COLUMNS.items()
                 if candidate == column
             )
             for model_s, source in scalar_signals[source_metric].items():
@@ -574,6 +611,10 @@ def main() -> None:
         set(result.get("model_s", pd.Series(dtype=str)).dropna().astype(str))
         | set(result.get("model_t", pd.Series(dtype=str)).dropna().astype(str))
     )
+    supporting_sources: dict[str, str] = derived_supporting_source_paths()
+    supporting_sources["benchmark_scripts/rv.py"] = os.path.join(
+        os.path.dirname(__file__), "rv.py"
+    )
     write_derived_provenance(
         output_path,
         generator_name="benchmark_scripts.race_rv",
@@ -602,10 +643,12 @@ def main() -> None:
                 list(cohorts[args.cohort]) if cohorts[args.cohort] is not None else None
             ),
             "output_models": output_models,
-            "missingness_policy": "pair_specific_complete_case",
+            "missingness_policy": FINITE_EXTREME_MISSINGNESS_POLICY,
+            "finite_extreme_relative_margin": FINITE_EXTREME_RELATIVE_MARGIN,
+            "finite_extreme_absolute_margin": FINITE_EXTREME_ABSOLUTE_MARGIN,
         },
         root_dir=args.results_dir,
-        supporting_source_paths=derived_supporting_source_paths(),
+        supporting_source_paths=supporting_sources,
     )
 
 

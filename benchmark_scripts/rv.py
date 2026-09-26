@@ -13,6 +13,70 @@ import hashlib
 
 import numpy as np
 
+FINITE_EXTREME_MISSINGNESS_POLICY: str = (
+    "model_specific_finite_extreme_preserve_all_missing"
+)
+FINITE_EXTREME_RELATIVE_MARGIN: float = 0.01
+FINITE_EXTREME_ABSOLUTE_MARGIN: float = 0.01
+
+
+def finite_extreme_offset(values: np.ndarray) -> float | None:
+    """Return the model-level offset used below the minimum finite value."""
+    finite: np.ndarray = values[np.isfinite(values)]
+    if finite.size == 0:
+        return None
+    minimum: float = float(finite.min())
+    return (
+        abs(minimum) * FINITE_EXTREME_RELATIVE_MARGIN + FINITE_EXTREME_ABSOLUTE_MARGIN
+    )
+
+
+def replace_censored_label_logprobs(
+    values: np.ndarray,
+    *,
+    offset: float | None = None,
+) -> np.ndarray:
+    """Replace partially censored label scores while preserving unusable rows.
+
+    A negative infinity denotes a label absent from a successful hosted
+    top-k response. When at least one label is observed on that row, missing
+    labels receive a shared value below the model's minimum finite label
+    log-probability. Rows on which every label is absent contain no relative
+    class information and remain unavailable as NaN.
+
+    Args:
+        values: Two-dimensional row-by-label log-probability array for one
+            model and benchmark.
+        offset: Optional fixed distance below the minimum finite value. When
+            omitted, use the canonical one-percent-plus-0.01 rule.
+
+    Returns:
+        A copied array with partial negative-infinity censoring replaced and
+        all-label-missing rows represented as NaN.
+
+    Raises:
+        ValueError: If ``values`` is not two-dimensional or ``offset`` is
+            negative.
+    """
+    if values.ndim != 2:
+        raise ValueError("Label log-probabilities must be a two-dimensional array")
+    if offset is not None and offset < 0:
+        raise ValueError("Finite-extreme offset must be nonnegative")
+    output: np.ndarray = np.asarray(values, dtype=float).copy()
+    all_labels_missing: np.ndarray = np.isneginf(output).all(axis=1)
+    output[all_labels_missing] = np.nan
+    finite: np.ndarray = output[np.isfinite(output)]
+    if finite.size == 0:
+        return output
+    resolved_offset: float | None = offset
+    if resolved_offset is None:
+        resolved_offset = finite_extreme_offset(output)
+    if resolved_offset is None:
+        return output
+    floor: float = float(finite.min() - resolved_offset)
+    output[np.isneginf(output)] = floor
+    return output
+
 
 def centered_rv(x: np.ndarray, y: np.ndarray) -> float:
     """Return the RV coefficient between two centered feature matrices."""

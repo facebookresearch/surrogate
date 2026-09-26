@@ -259,4 +259,6 @@ class TestDerivedProvenance(TestCase):
         expected_sources: set[str] = set(DERIVED_SUPPORTING_SOURCE_FILES)
         if generator == "benchmark_scripts.f_table":
             expected_sources.add("benchmark_scripts/layerwise_fidelity.py")
+        if generator in {"benchmark_scripts.anli_rv", "benchmark_scripts.race_rv"}:
+            expected_sources.add("benchmark_scripts/rv.py")
         self.assertEqual(set(payload["supporting_sources"]), expected_sources)

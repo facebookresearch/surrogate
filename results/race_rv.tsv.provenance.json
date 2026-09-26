@@ -3,7 +3,7 @@
   "generator": {
     "module": "benchmark_scripts.race_rv",
     "provenance_writer_sha256": "a61dc3d512acf567d255528ad56a6a95d81d9dec9047b4d00f07589da94ba50b",
-    "source_sha256": "c0f01753bb7ca9042b639ab32198e9d99be3511df23f9d8b24f3bb3d19c01abb"
+    "source_sha256": "f58f8f0121eb9b17332cdaaac272ed021c61715071c64f1aab4b4f64554d3323"
   },
   "inputs": {
     "race/sentence/raw/gemini-2-5-flash-lite-vertex_run.json": {
@@ -53,7 +53,7 @@
     },
     "race/sentence/raw/llama-3.1-8b-instruct_run.json": {
       "path": "race/sentence/llama-3.1-8b-instruct_run.json",
-      "sha256": "27766f555d8441ae2289a02c36c9d7f2870e66e9c2c857ad490a9dd0942d0795",
+      "sha256": "6056218f1eb6336c479451cf0914c130ac542d8303a7d8f80050a19f14e85397",
       "size_bytes": 8263
     },
     "race/sentence/raw/llama-3.1-8b-instruct_segment.tsv.gz": {
@@ -113,7 +113,7 @@
     },
     "race/sentence/raw/qwen2.5-0.5b-instruct_run.json": {
       "path": "race/sentence/qwen2.5-0.5b-instruct_run.json",
-      "sha256": "f394df48a7fd85f76fb861d2a8b6c94b195a4848067bcc00ce90cf3e88df596b",
+      "sha256": "d84200db5e5dce01ab602333faf9ea63e059c03f8bb43848b049ae5afbb01bee",
       "size_bytes": 9139
     },
     "race/sentence/raw/qwen2.5-0.5b-instruct_segment.tsv.gz": {
@@ -128,7 +128,7 @@
     },
     "race/sentence/raw/qwen2.5-14b-instruct_run.json": {
       "path": "race/sentence/qwen2.5-14b-instruct_run.json",
-      "sha256": "dc885b2d5185757b40fa7b86af39d830c0440a89ffea37c277992e000ef0fbbc",
+      "sha256": "2facf15bc1d715244267a13680f97813ad470e5ef614c0fc6dc85ef9edb1263b",
       "size_bytes": 10115
     },
     "race/sentence/raw/qwen2.5-14b-instruct_segment.tsv.gz": {
@@ -143,7 +143,7 @@
     },
     "race/sentence/raw/qwen2.5-3b-instruct_run.json": {
       "path": "race/sentence/qwen2.5-3b-instruct_run.json",
-      "sha256": "e909bcfd3ce390abe1cc5c5d28a06fb8e1b51af9226615d110687bd6b5c5c1f1",
+      "sha256": "d8a05e0522c23bff1b024ad3a1076981c64cb475004b9371ab5ffe0d3f9cefdc",
       "size_bytes": 9464
     },
     "race/sentence/raw/qwen2.5-3b-instruct_segment.tsv.gz": {
@@ -158,7 +158,7 @@
     },
     "race/sentence/raw/qwen2.5-7b-instruct_run.json": {
       "path": "race/sentence/qwen2.5-7b-instruct_run.json",
-      "sha256": "d7813c755be86183e4238d192ff8bcc66dfffa3b90e03f92674ef4621496c623",
+      "sha256": "1d9b664b9d8e96ea1da5cd908d49a7f4bf045fd70adf9896e7b64b4b91232918",
       "size_bytes": 9680
     },
     "race/sentence/raw/qwen2.5-7b-instruct_segment.tsv.gz": {
@@ -179,14 +179,16 @@
   },
   "output": {
     "path": "race_rv.tsv",
-    "sha256": "756f5c9be8f612f37b75b7dafc259cd23ce0dd475c5ee83e74015b387a256c09",
-    "size_bytes": 124769
+    "sha256": "721095fb3b3920a868c8248b10c7d03b7430efea450414929e2c74dfb42558d4",
+    "size_bytes": 133283
   },
   "parameters": {
     "bootstrap_resamples": 1000,
     "cohort": "paper",
     "confidence_level": 0.95,
-    "missingness_policy": "pair_specific_complete_case",
+    "finite_extreme_absolute_margin": 0.01,
+    "finite_extreme_relative_margin": 0.01,
+    "missingness_policy": "model_specific_finite_extreme_preserve_all_missing",
     "output_models": [
       "gemini-2-5-flash-lite-vertex",
       "gpt-4-1",
@@ -231,7 +233,7 @@
     "python": "3.12.14+meta",
     "python_implementation": "CPython",
     "scipy": "1.18.1",
-    "tqdm": "4.67.3"
+    "tqdm": "4.70.1"
   },
   "supporting_sources": {
     "benchmark_scripts/benchmark_config.py": {
@@ -257,6 +259,10 @@
     "benchmark_scripts/run_all_benchmarks.sh": {
       "sha256": "6e5cc162cbc774fbd8cb86f39c00d4eeda694cf9185ed78b1de897399eb23e50",
       "size_bytes": 10076
+    },
+    "benchmark_scripts/rv.py": {
+      "sha256": "97de13a8448747d34ac6ac3bde7810aa7bacc55886e0c9acbf4ad9780e887c6b",
+      "size_bytes": 7137
     },
     "surrogate/eval_constants.py": {
       "sha256": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",

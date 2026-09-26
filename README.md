@@ -27,9 +27,10 @@ pytest tests/
 
 [`notebooks/paper_figures.ipynb`](notebooks/paper_figures.ipynb) regenerates
 the revised paper's public-data tables and figures from the committed result
-artifacts. It uses the canonical full-dialog, pairwise-complete analysis,
-including multivariate RV over all pairwise label margins for ANLI and RACE;
-scalar ANLI diagnostics retain entailment-minus-contradiction. The per-layer
+artifacts. It uses the canonical full-dialog analysis, including multivariate
+RV over all pairwise label margins for ANLI and RACE with finite-extreme
+replacement of partially censored label scores; scalar ANLI diagnostics retain
+entailment-minus-contradiction. The per-layer
 figure reports unnormalized `F_pred`, signed `F_attr`,
 and the matched grouped readout-compatible control. Notebook-only appendix
 outputs include the prediction-attribution gap and a tuned-lens sensitivity
@@ -52,12 +53,15 @@ installed in editable mode, set `SURROGATE_REPO_ROOT=/path/to/surrogate`.
 
 The release uses these primary choices:
 
-- User-message segment coordinates, with the full dialog retained as context.
-- Entailment-minus-contradiction log odds for ANLI.
+- All system- and user-message segment coordinates in shared full-dialog order.
+- Centered RV over every pairwise label margin for ANLI and RACE; scalar ANLI
+  representation and cross-level diagnostics retain entailment-minus-contradiction.
 - No duplicated BOS or tokenizer-added special tokens: chat templates produce
   the control-token prefix, and current runs subsequently tokenize rendered
   prompts with `add_special_tokens=False`.
-- Model-pair-specific complete cases for non-finite hosted scores.
+- Scalar analyses use model-pair-specific complete cases for non-finite hosted
+  scores. Multiclass analyses replace partially censored label scores with a
+  model-specific finite extreme while leaving all-label-missing rows unavailable.
 - Row-pooled point estimates with prompt-cluster bootstrap intervals.
 - Signed Spearman and Pearson correlations, plus Pearson \(r^2\).
 - Pair-specific observation and prompt coverage reported with every estimate.
@@ -66,9 +70,9 @@ A successful hosted response whose requested label is absent from top-k is
 stored as `-inf`. A request without a valid response is unavailable and becomes
 `NaN` in derived scores. These states remain distinct in the raw artifacts.
 
-The finite-extreme table is a non-primary sensitivity analysis. It replaces a
-hosted model's infinities just outside that signal's observed finite range,
-where such a range exists, while leaving unavailable values missing.
+The scalar finite-extreme table is a non-primary sensitivity analysis. It
+replaces a hosted model's infinities just outside that signal's observed finite
+range, where such a range exists, while leaving unavailable values missing.
 
 ## Running benchmarks
 
@@ -306,8 +310,9 @@ signals using centered RV. The `all_pairs` representation is the six pairwise
 A--D margin system; `anchor_a` is included as a three-dimensional sensitivity.
 Scalar representation metrics and their attribution comparisons use centered
 RV on the answer-conditioned correct-vs-rest contrast (equivalently Pearson
-`r²` in one dimension). Hosted comparisons use model-pair-specific finite
-complete cases and report their coverage.
+`r²` in one dimension). For hosted outputs, absent labels in otherwise usable
+top-k responses receive a model-specific finite floor; rows with no observed
+label or a failed request remain unavailable. Every estimate reports coverage.
 
 ### 5. Run the Muse Glimmer robustness extension
 

@@ -5,7 +5,12 @@
 
 # pyre-strict
 
-"""Compute ANLI fidelity with centered RV over all three label margins."""
+"""Compute ANLI fidelity with centered RV over all three label margins.
+
+Partially censored hosted top-k rows use a model-specific finite floor. Rows
+with no observed class score remain unavailable rather than becoming an
+artificial zero-margin observation.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +26,15 @@ from benchmark_scripts.derived_provenance import (
     derived_supporting_source_paths,
     write_derived_provenance,
 )
-from benchmark_scripts.rv import aligned, analysis_seed, cluster_bootstrap_rv
+from benchmark_scripts.rv import (
+    FINITE_EXTREME_ABSOLUTE_MARGIN,
+    FINITE_EXTREME_MISSINGNESS_POLICY,
+    FINITE_EXTREME_RELATIVE_MARGIN,
+    aligned,
+    analysis_seed,
+    cluster_bootstrap_rv,
+    replace_censored_label_logprobs,
+)
 
 LABELS: tuple[str, ...] = ("entailment", "neutral", "contradiction")
 BENCHMARKS: tuple[str, ...] = ("anli_r1", "anli_r2", "anli_r3")
@@ -40,6 +53,17 @@ PAPER_MODELS: tuple[str, ...] = OPEN_MODELS + (
     "gpt-4-1",
     "gemini-2-5-flash-lite-vertex",
 )
+
+
+def _apply_missingness_policy(frame: pd.DataFrame) -> pd.DataFrame:
+    """Apply the canonical finite-extreme policy independently by model."""
+    output: pd.DataFrame = frame.copy()
+    label_columns: list[str] = [f"label_lp_{label}" for label in LABELS]
+    for indices in output.groupby("model", sort=False).groups.values():
+        output.loc[indices, label_columns] = replace_censored_label_logprobs(
+            output.loc[indices, label_columns].to_numpy(dtype=float)
+        )
+    return output
 
 
 def _pair_vectors(frame: pd.DataFrame) -> np.ndarray:
@@ -81,9 +105,9 @@ def _model_vectors(
     ].rename(columns={f"{column}_ablated": column for column in label_columns})
     index: pd.MultiIndex = pd.MultiIndex.from_frame(merged[["prompt_idx", "seg_idx"]])
     with np.errstate(invalid="ignore"):
-        attribution_values: np.ndarray = _pair_vectors(
-            original_labels
-        ) - _pair_vectors(ablated_labels)
+        attribution_values: np.ndarray = _pair_vectors(original_labels) - _pair_vectors(
+            ablated_labels
+        )
     attributions: pd.DataFrame = pd.DataFrame(attribution_values, index=index)
     return predictions, attributions
 
@@ -133,13 +157,15 @@ def _append_result(
             "model_t": model_t,
             "metric": metric,
             "statistic": "rv",
-            "missingness_policy": "pair_specific_complete_case",
+            "missingness_policy": FINITE_EXTREME_MISSINGNESS_POLICY,
             "expected_observations": len(common),
             "n_observations": len(x),
             "expected_prompts": expected_prompts,
             "n_prompts": n_prompts,
             "observation_coverage": len(x) / len(common) if len(common) else np.nan,
-            "prompt_coverage": n_prompts / expected_prompts if expected_prompts else np.nan,
+            "prompt_coverage": (
+                n_prompts / expected_prompts if expected_prompts else np.nan
+            ),
             "f_point": point,
             "f_lo": low,
             "f_hi": high,
@@ -176,6 +202,7 @@ def compute_anli_rv(
         missing: set[str] = required - set(frame.columns)
         if missing:
             raise ValueError(f"{benchmark} omits label columns {sorted(missing)}")
+        frame = _apply_missingness_policy(frame)
         available: set[str] = set(frame["model"].dropna().astype(str))
         models: list[str] = sorted(available) if cohort is None else list(cohort)
         if cohort is not None and (missing_models := set(cohort) - available):
@@ -221,8 +248,12 @@ def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default="results")
     parser.add_argument("--output", default=None)
-    parser.add_argument("--benchmarks", nargs="+", choices=BENCHMARKS, default=BENCHMARKS)
-    parser.add_argument("--scopes", nargs="+", choices=["all", "system", "user"], default=["all"])
+    parser.add_argument(
+        "--benchmarks", nargs="+", choices=BENCHMARKS, default=BENCHMARKS
+    )
+    parser.add_argument(
+        "--scopes", nargs="+", choices=["all", "system", "user"], default=["all"]
+    )
     parser.add_argument("--bootstrap-resamples", type=int, default=1000)
     parser.add_argument("--confidence-level", type=float, default=0.95)
     parser.add_argument("--seed", type=int, default=42)
@@ -276,7 +307,9 @@ def main() -> None:
             "confidence_level": args.confidence_level,
             "seed": args.seed,
             "cohort": args.cohort,
-            "missingness_policy": "pair_specific_complete_case",
+            "missingness_policy": FINITE_EXTREME_MISSINGNESS_POLICY,
+            "finite_extreme_relative_margin": FINITE_EXTREME_RELATIVE_MARGIN,
+            "finite_extreme_absolute_margin": FINITE_EXTREME_ABSOLUTE_MARGIN,
         },
         root_dir=args.results_dir,
         supporting_source_paths=supporting_sources,
