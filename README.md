@@ -1,6 +1,6 @@
-# Surrogate Fidelity: When Can Open LLMs Explain Closed Ones?
+# Anonymous surrogate-fidelity artifact
 
-Reference implementation and audited benchmark artifacts for measuring
+Anonymous reference implementation and audited benchmark artifacts for measuring
 prediction, attribution, attention, and representation fidelity across language
 models.
 

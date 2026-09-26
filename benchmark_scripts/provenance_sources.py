@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) 2025 The Authors
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
+from typing import Any
 
 
 def canonical_file_hash_manifest_sha256(file_hashes: Mapping[str, str]) -> str:
@@ -149,6 +150,72 @@ GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256: dict[str, str] = {
     ),
 }
 
+# Exact execution-time source bytes for the corrected single-BOS rerun. These
+# remain immutable provenance even when a review-only release changes comments
+# without changing executable behavior.
+GOLD_OPEN_POST_RERUN_EXECUTION_SOURCE_SHA256: dict[str, str] = {
+    "benchmark_scripts/benchmark_config.py": (
+        "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a"
+    ),
+    "benchmark_scripts/run_benchmark.py": (
+        "7e68f08b7ff115240e01cf5d718ec6ccdbfa816981dbb2e7f5783b10a5196980"
+    ),
+    "surrogate/attention_scoring.py": (
+        "63cb3535ab296ff952ea3caf57479391d399cf703170d2ece501e549d9393fa3"
+    ),
+    "surrogate/eval_constants.py": (
+        "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6"
+    ),
+    "surrogate/model_types.py": (
+        "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd"
+    ),
+    "surrogate/representation_scoring.py": (
+        "c574c6cfaa5c9d3b6380129d019ef259f06f19ccb0f01c07def1a60abc391b0c"
+    ),
+    "surrogate/text_augmentation.py": (
+        "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16"
+    ),
+    "surrogate/transformers_model.py": (
+        "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b"
+    ),
+    "surrogate/transformers_scoring.py": (
+        "18a894fd3f0153152162ee7ee4b028f1a673e62468b1a00762ddf8033f71e35e"
+    ),
+    "surrogate/utils.py": (
+        "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638"
+    ),
+}
+
+GOLD_LAYER_EXECUTION_SOURCE_SHA256: dict[str, str] = {
+    "benchmark_scripts/benchmark_config.py": (
+        "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a"
+    ),
+    "benchmark_scripts/provenance_sources.py": (
+        "97f9094e680f29d9cb908ddf64a5df52ba5c30f09d3135bb71459eab29e48317"
+    ),
+    "benchmark_scripts/run_layerwise.py": (
+        "718b4d3e8c8bcd920259f61055217243090afa739748d28b6db78d817d9e27f1"
+    ),
+    "surrogate/eval_constants.py": (
+        "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6"
+    ),
+    "surrogate/layerwise_scoring.py": (
+        "49474e2df6cd66227f3cf538afa371b6798e3632f16e4a31d40988d6ac71411c"
+    ),
+    "surrogate/model_types.py": (
+        "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd"
+    ),
+    "surrogate/text_augmentation.py": (
+        "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16"
+    ),
+    "surrogate/transformers_model.py": (
+        "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b"
+    ),
+    "surrogate/utils.py": (
+        "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638"
+    ),
+}
+
 # Current runs hash this complete execution dependency set directly. Earlier
 # Qwen run records contain the four-file subset above; the broader observed
 # snapshot is separately labeled as post-run corroboration in their sidecars.
@@ -231,6 +298,50 @@ GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS: dict[str, dict[str, str]] = {
         "scope": "qwen_tokenization_equivalence_verified_no_numerical_change",
     },
 }
+
+
+def build_release_source_corrections(
+    execution_hashes: Any,
+    release_hashes: dict[str, str],
+) -> dict[str, dict[str, str]]:
+    """Describe approved execution-to-release changes without rewriting history."""
+    release_execution_hashes: dict[str, str] = {
+        path: release_hashes[path] for path in OPEN_EXECUTION_SOURCE_FILES
+    }
+    if execution_hashes == GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256:
+        baseline: dict[str, dict[str, str]] = GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS
+    elif execution_hashes == GOLD_OPEN_POST_RERUN_EXECUTION_SOURCE_SHA256:
+        baseline = {}
+    elif execution_hashes == release_execution_hashes:
+        return {}
+    else:
+        raise ValueError("Execution source hashes are neither gold nor current release")
+
+    corrections: dict[str, dict[str, str]] = {}
+    for path, execution_sha256 in execution_hashes.items():
+        release_sha256: str = release_hashes[path]
+        if release_sha256 == execution_sha256:
+            continue
+        previous: dict[str, str] | None = baseline.get(path)
+        if (
+            previous is not None
+            and previous.get("execution_sha256") == execution_sha256
+            and previous.get("release_sha256") == release_sha256
+        ):
+            corrections[path] = previous
+            continue
+        reason: str = "Prepare the review release without numerical changes."
+        scope: str = "review_packaging_only_no_numerical_change"
+        if previous is not None:
+            reason = f"{previous['reason']} {reason}"
+            scope = f"{previous['scope']}_and_review_packaging"
+        corrections[path] = {
+            "execution_sha256": execution_sha256,
+            "release_sha256": release_sha256,
+            "reason": reason,
+            "scope": scope,
+        }
+    return corrections
 
 # Fixed public text used in gold hosted run records. Producer-specific details
 # belong in hash-bound structured fields, not in a free-form string that could

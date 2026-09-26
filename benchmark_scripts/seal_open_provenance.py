@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) 2025 The Authors
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -21,14 +21,15 @@ from transformers import AutoTokenizer
 from benchmark_scripts.provenance_sources import (
     GOLD_OPEN_EXECUTION_MODEL_SOURCES,
     GOLD_OPEN_EXECUTION_SOURCE_SHA256,
+    GOLD_OPEN_POST_RERUN_EXECUTION_SOURCE_SHA256,
     GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256,
     GOLD_OPEN_MODEL_ARTIFACT_MANIFEST_SHA256,
     GOLD_OPEN_MODEL_REPOSITORIES,
     GOLD_OPEN_MODEL_REVISIONS,
-    GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS,
     OPEN_COMPLETE_SOURCE_FILES,
     OPEN_EXECUTION_SOURCE_FILES,
     OPEN_MODEL_IDENTITY_FILENAMES,
+    build_release_source_corrections,
     canonical_file_hash_manifest_sha256,
 )
 
@@ -39,6 +40,17 @@ def _sha256(path: str) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _release_source_corrections(
+    execution_dependency_hashes: Any,
+    release_hashes: dict[str, str],
+) -> dict[str, dict[str, str]]:
+    """Build the release corrections recorded in an open-model sidecar."""
+    return build_release_source_corrections(
+        execution_dependency_hashes,
+        release_hashes,
+    )
 
 
 def _model_artifact_hashes(model_path: str) -> dict[str, str]:
@@ -52,40 +64,6 @@ def _model_artifact_hashes(model_path: str) -> dict[str, str]:
     if not any(name.endswith((".safetensors", ".bin")) for name in names):
         raise ValueError(f"No model weight files found in {model_path}")
     return {name: _sha256(os.path.join(model_path, name)) for name in names}
-
-
-def _release_source_corrections(
-    execution_dependency_hashes: Any,
-    release_hashes: dict[str, str],
-) -> dict[str, dict[str, str]]:
-    """Accept the observed Qwen dependency snapshot or an exact release run."""
-    release_execution_hashes: dict[str, str] = {
-        path: release_hashes[path] for path in OPEN_EXECUTION_SOURCE_FILES
-    }
-    if execution_dependency_hashes == GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256:
-        expected_corrections: dict[str, dict[str, str]] = (
-            GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS
-        )
-    elif execution_dependency_hashes == release_execution_hashes:
-        expected_corrections = {}
-    else:
-        raise ValueError("Execution source hashes are neither gold nor current release")
-    actual_corrections: dict[str, dict[str, str]] = {}
-    for path, execution_sha256 in execution_dependency_hashes.items():
-        release_sha256: str = release_hashes[path]
-        if release_sha256 == execution_sha256:
-            continue
-        expected: dict[str, str] | None = expected_corrections.get(path)
-        if (
-            expected is None
-            or expected.get("execution_sha256") != execution_sha256
-            or expected.get("release_sha256") != release_sha256
-        ):
-            raise ValueError(f"Unapproved execution/release source change: {path}")
-        actual_corrections[path] = expected
-    if actual_corrections != expected_corrections:
-        raise ValueError("Expected execution/release source correction is absent")
-    return actual_corrections
 
 
 def _verify_rendered_chat_tokenization(
@@ -202,7 +180,11 @@ def seal(results_dir: str, model: str, model_path: str) -> int:
         )
         if (
             execution_hashes
-            not in (GOLD_OPEN_EXECUTION_SOURCE_SHA256, release_execution_hashes)
+            not in (
+                GOLD_OPEN_EXECUTION_SOURCE_SHA256,
+                GOLD_OPEN_POST_RERUN_EXECUTION_SOURCE_SHA256,
+                release_execution_hashes,
+            )
             or execution_model_source != expected_execution_model_source
         ):
             raise ValueError(

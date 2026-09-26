@@ -2,8 +2,8 @@
   "artifact_type": "derived_table",
   "generator": {
     "module": "benchmark_scripts.layerwise_fidelity",
-    "provenance_writer_sha256": "a61dc3d512acf567d255528ad56a6a95d81d9dec9047b4d00f07589da94ba50b",
-    "source_sha256": "a6bcb964d20cfc9e8ecd125b1adc4db84dca7b92ea06fa60c53d510b9d6902bb"
+    "provenance_writer_sha256": "b4c4c64c18780bd9d67caef5a1e164ea0e2a4143df827ca377d62ad31031dc7c",
+    "source_sha256": "1c9027db9dfa2cc0cfe7c165761c1e89666ff8baaa4354fead46a4797096c56a"
   },
   "inputs": {
     "anli_r1/sentence/llama-3.1-8b-instruct/layers": {
@@ -275,27 +275,27 @@
   "software": {
     "numpy": "2.5.3",
     "pandas": "2.3.3",
-    "python": "3.12.14+meta",
+    "python": "3.12.14",
     "python_implementation": "CPython",
     "scipy": "1.18.1",
     "tqdm": "4.67.3"
   },
   "supporting_sources": {
     "benchmark_scripts/benchmark_config.py": {
-      "sha256": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
-      "size_bytes": 10535
+      "sha256": "9b9760aca79a44e5a0767f2218463a2b2c279b80dbb2c75f6122e05dfee348ce",
+      "size_bytes": 10515
     },
     "benchmark_scripts/derived_provenance.py": {
-      "sha256": "a61dc3d512acf567d255528ad56a6a95d81d9dec9047b4d00f07589da94ba50b",
-      "size_bytes": 8425
+      "sha256": "b4c4c64c18780bd9d67caef5a1e164ea0e2a4143df827ca377d62ad31031dc7c",
+      "size_bytes": 8405
     },
     "benchmark_scripts/f_table.py": {
-      "sha256": "1b438818e29473a5a2a22445c67c19add6b04a9c3004f5aa23f9537bc915b666",
-      "size_bytes": 63626
+      "sha256": "424ccde344df07ec6416e645a6dcb9695c90eda79383b74fa556c0f6a23682a9",
+      "size_bytes": 63606
     },
     "surrogate/eval_constants.py": {
-      "sha256": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
-      "size_bytes": 4981
+      "sha256": "dd85662e815e073b5ecd43a8c26f9eabc241e135972b3c7ebca59bbf72fc81de",
+      "size_bytes": 4961
     }
   }
 }

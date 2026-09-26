@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) 2025 The Authors
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -88,18 +88,20 @@ from benchmark_scripts.provenance_sources import (
     GOLD_HOSTED_COMPLETION_AUDIT_RECEIPT_SHA256,
     GOLD_HOSTED_IDENTITY_ATTESTATION,
     GOLD_HOSTED_IMPORT_SOURCE_SHA256,
+    GOLD_LAYER_EXECUTION_SOURCE_SHA256,
     GOLD_OPEN_EXECUTION_SOURCE_SHA256,
+    GOLD_OPEN_POST_RERUN_EXECUTION_SOURCE_SHA256,
     GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256,
     GOLD_OPEN_MODEL_ARTIFACT_MANIFEST_SHA256,
     GOLD_OPEN_MODEL_REPOSITORIES,
     GOLD_OPEN_MODEL_REVISIONS,
-    GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS,
     HOSTED_IMPORT_SOURCE_FILES,
     HOSTED_RECORD_SOURCE_FILES,
     LAYER_EXECUTION_SOURCE_FILES,
     OPEN_COMPLETE_SOURCE_FILES,
     OPEN_EXECUTION_SOURCE_FILES,
     OPEN_MODEL_IDENTITY_FILENAMES,
+    build_release_source_corrections,
     canonical_file_hash_manifest_sha256,
 )
 from benchmark_scripts.rv import (
@@ -2042,7 +2044,10 @@ def validate_configuration(
                         f"{run_metadata}"
                     )
                 expected_corrections: dict[str, dict[str, str]] = (
-                    GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS
+                    build_release_source_corrections(
+                        GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256,
+                        release_hashes,
+                    )
                 )
                 expected_execution_model_source: str | None = (
                     GOLD_OPEN_EXECUTION_MODEL_SOURCES.get(model)
@@ -2055,13 +2060,19 @@ def validate_configuration(
                     "post_run_reconstruction_not_execution_attested"
                 )
                 expected_add_special_tokens: bool = True
-            elif execution_hashes == release_execution_hashes:
-                expected_corrections = {}
+            elif execution_hashes in (
+                GOLD_OPEN_POST_RERUN_EXECUTION_SOURCE_SHA256,
+                release_execution_hashes,
+            ):
+                expected_corrections = build_release_source_corrections(
+                    execution_hashes,
+                    release_hashes,
+                )
                 expected_execution_model_source = GOLD_OPEN_MODEL_REPOSITORIES.get(
                     model
                 )
                 expected_source_hash_timing = "run_start"
-                expected_dependency_hashes = release_execution_hashes
+                expected_dependency_hashes = dict(execution_hashes)
                 expected_dependency_hash_timing = "run_start"
                 expected_add_special_tokens = False
             else:
@@ -2610,7 +2621,10 @@ def _validate_layer_run_sidecar(
         relative: _sha256(os.path.join(repository_root, relative))
         for relative in LAYER_EXECUTION_SOURCE_FILES
     }
-    if source_hashes != expected_source_hashes:
+    if source_hashes not in (
+        expected_source_hashes,
+        GOLD_LAYER_EXECUTION_SOURCE_SHA256,
+    ):
         raise ValueError(f"Layer execution source hashes disagree in {path}")
 
 

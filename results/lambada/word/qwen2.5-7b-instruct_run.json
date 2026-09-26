@@ -69,63 +69,93 @@
     "seed": 42
   },
   "pregrouper": "word",
-  "provenance_seal_sha256": "5237b47ea5346bbdd31f7297706147b8fcb31c91aff09194a7361d450bf44191",
+  "provenance_seal_sha256": "8c42aea1b5591746263caf548e38628926742b4551c775aaefebf56f2969bd9d",
   "release_source_corrections": {
     "benchmark_scripts/benchmark_config.py": {
       "execution_sha256": "2c0f28b30cd8779af076c6a6c5813356eeb5d8b0eb07bf883159a7ada64845aa",
-      "reason": "Canonicalize both public Llama repository locators.",
-      "release_sha256": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
-      "scope": "model_locator_only_no_numerical_change"
+      "reason": "Canonicalize both public Llama repository locators. Prepare the review release without numerical changes.",
+      "release_sha256": "9b9760aca79a44e5a0767f2218463a2b2c279b80dbb2c75f6122e05dfee348ce",
+      "scope": "model_locator_only_no_numerical_change_and_review_packaging"
     },
     "benchmark_scripts/run_benchmark.py": {
       "execution_sha256": "f5b4549e1df21833d674d7425a613100d8bbb0a7cb606b6b9a81427dc07b2987",
-      "reason": "Hash the complete execution dependency set at run start and record the single-BOS rendered-chat policy.",
-      "release_sha256": "7e68f08b7ff115240e01cf5d718ec6ccdbfa816981dbb2e7f5783b10a5196980",
-      "scope": "provenance_and_qwen_tokenization_noop"
+      "reason": "Hash the complete execution dependency set at run start and record the single-BOS rendered-chat policy. Prepare the review release without numerical changes.",
+      "release_sha256": "4dc921d4e2ab9271cf7be5060bed628f9de5c85608658edb829cb3f5423616c3",
+      "scope": "provenance_and_qwen_tokenization_noop_and_review_packaging"
     },
     "surrogate/attention_scoring.py": {
       "execution_sha256": "a8f6a8cce01767e4839b0c3684f58481bd1c434acf71707a33814321eaa4b538",
-      "reason": "Use the explicit rendered-chat tokenization policy.",
-      "release_sha256": "63cb3535ab296ff952ea3caf57479391d399cf703170d2ece501e549d9393fa3",
-      "scope": "qwen_tokenization_equivalence_verified_no_numerical_change"
+      "reason": "Use the explicit rendered-chat tokenization policy. Prepare the review release without numerical changes.",
+      "release_sha256": "8410f770f8b466eb46766e9833a6bcef2772ef2063f80014ef1d1fe30193f553",
+      "scope": "qwen_tokenization_equivalence_verified_no_numerical_change_and_review_packaging"
+    },
+    "surrogate/eval_constants.py": {
+      "execution_sha256": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
+      "reason": "Prepare the review release without numerical changes.",
+      "release_sha256": "dd85662e815e073b5ecd43a8c26f9eabc241e135972b3c7ebca59bbf72fc81de",
+      "scope": "review_packaging_only_no_numerical_change"
+    },
+    "surrogate/model_types.py": {
+      "execution_sha256": "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd",
+      "reason": "Prepare the review release without numerical changes.",
+      "release_sha256": "a0014380ab6d3b4822d09b5ff22958fa5440702db99ddd6b3412289e0f06dcd1",
+      "scope": "review_packaging_only_no_numerical_change"
+    },
+    "surrogate/representation_scoring.py": {
+      "execution_sha256": "c574c6cfaa5c9d3b6380129d019ef259f06f19ccb0f01c07def1a60abc391b0c",
+      "reason": "Prepare the review release without numerical changes.",
+      "release_sha256": "50158ca0e0d4616006aee2560efd2209e5deab8750ddbdc6e7d1dc86dac04413",
+      "scope": "review_packaging_only_no_numerical_change"
+    },
+    "surrogate/text_augmentation.py": {
+      "execution_sha256": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
+      "reason": "Prepare the review release without numerical changes.",
+      "release_sha256": "7a24e5260a736cc845309095ca1e9604c7564e557f9b9a651917e0d1ceb13f4e",
+      "scope": "review_packaging_only_no_numerical_change"
     },
     "surrogate/transformers_model.py": {
       "execution_sha256": "b9fd08fe2ba2f0dbc4dd41b468c9875dfcac2c62373ccadeef1837409dbf10f9",
-      "reason": "Use the explicit rendered-chat tokenization policy.",
-      "release_sha256": "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b",
-      "scope": "qwen_tokenization_equivalence_verified_no_numerical_change"
+      "reason": "Use the explicit rendered-chat tokenization policy. Prepare the review release without numerical changes.",
+      "release_sha256": "ae35c521ededdf5cd05c755ed8ecaa2fdfe813735b1822f9092ea76bd11997f5",
+      "scope": "qwen_tokenization_equivalence_verified_no_numerical_change_and_review_packaging"
+    },
+    "surrogate/transformers_scoring.py": {
+      "execution_sha256": "18a894fd3f0153152162ee7ee4b028f1a673e62468b1a00762ddf8033f71e35e",
+      "reason": "Prepare the review release without numerical changes.",
+      "release_sha256": "852300dea8c9831bb5d7c759f6437040342818265b06ab017b25117272ae07ce",
+      "scope": "review_packaging_only_no_numerical_change"
     },
     "surrogate/utils.py": {
       "execution_sha256": "256c98c992e39f9bfa8862f112b0bf77bd4f1d91ebcabb9366e714f34d6964a0",
-      "reason": "Simplify sentence segmentation while preserving every frozen benchmark segment manifest exactly.",
-      "release_sha256": "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638",
-      "scope": "segmentation_refactor_manifest_identical"
+      "reason": "Simplify sentence segmentation while preserving every frozen benchmark segment manifest exactly. Prepare the review release without numerical changes.",
+      "release_sha256": "3c65316a50837743f5da7d9dfbb2a5a11abe3303bec86120b72bf718453a5098",
+      "scope": "segmentation_refactor_manifest_identical_and_review_packaging"
     }
   },
   "release_source_sha256": {
-    "benchmark_scripts/benchmark_config.py": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
-    "benchmark_scripts/compute_logodds.py": "e79fd4606ed6f749bf0f2b0f7dc0aa4845d14d3378a60c1d030ae5f2362550cc",
-    "benchmark_scripts/consolidate_results.py": "f9fb58ed977f9ddb103d9099bccb3dac2e6cd33a47444e5c6eb8a54bb5d117f4",
-    "benchmark_scripts/dialog_identity.py": "c259193fea2cd45a079b9c0ea1ff1f4b5ed6a030a965b7c43ee738551b306939",
-    "benchmark_scripts/f_table.py": "1b438818e29473a5a2a22445c67c19add6b04a9c3004f5aa23f9537bc915b666",
-    "benchmark_scripts/hosted_audit_receipt.py": "08bd899c6e594e8d055cec247898361a16905a2c263f74219e2912d90852d04f",
-    "benchmark_scripts/hosted_completion_audit_receipt.py": "c0cf3091ce96f495bef093b3d386b2b0852fca288f4d94b18fe936337fb45dcc",
-    "benchmark_scripts/layerwise_fidelity.py": "a6bcb964d20cfc9e8ecd125b1adc4db84dca7b92ea06fa60c53d510b9d6902bb",
-    "benchmark_scripts/normalize_segment_outputs.py": "663d9c7f2d218995ff60bcc30b2ef17f07ecbc9eec3824abfa5ee476e5061b4c",
-    "benchmark_scripts/provenance_sources.py": "97f9094e680f29d9cb908ddf64a5df52ba5c30f09d3135bb71459eab29e48317",
-    "benchmark_scripts/race_rv.py": "f58f8f0121eb9b17332cdaaac272ed021c61715071c64f1aab4b4f64554d3323",
-    "benchmark_scripts/run_benchmark.py": "7e68f08b7ff115240e01cf5d718ec6ccdbfa816981dbb2e7f5783b10a5196980",
-    "benchmark_scripts/run_layerwise.py": "718b4d3e8c8bcd920259f61055217243090afa739748d28b6db78d817d9e27f1",
-    "benchmark_scripts/validate_results.py": "61aa59d2c625c06bca2f1fb7e1c39c83f00644a81cc3ea9872203d097c8de56e",
-    "surrogate/attention_scoring.py": "63cb3535ab296ff952ea3caf57479391d399cf703170d2ece501e549d9393fa3",
-    "surrogate/eval_constants.py": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
-    "surrogate/layerwise_scoring.py": "49474e2df6cd66227f3cf538afa371b6798e3632f16e4a31d40988d6ac71411c",
-    "surrogate/model_types.py": "9bf381e60172217c0bfbc5eef79c07c9eed9ea8d8b0f28ad57f9d651fb3b75bd",
-    "surrogate/representation_scoring.py": "c574c6cfaa5c9d3b6380129d019ef259f06f19ccb0f01c07def1a60abc391b0c",
-    "surrogate/text_augmentation.py": "0183846200a7d12c23259e3a0dda89d478bbb35e5cba7ef0e796126db19e3d16",
-    "surrogate/transformers_model.py": "61d6e906b539354e798000dc055eb4c6e9bedb1c0605e4851585796bcaa8d67b",
-    "surrogate/transformers_scoring.py": "18a894fd3f0153152162ee7ee4b028f1a673e62468b1a00762ddf8033f71e35e",
-    "surrogate/utils.py": "9d8e6146a7c635fc0c2e89e08cb3b70bb6929b56eb7cc541b9df105dcc227638"
+    "benchmark_scripts/benchmark_config.py": "9b9760aca79a44e5a0767f2218463a2b2c279b80dbb2c75f6122e05dfee348ce",
+    "benchmark_scripts/compute_logodds.py": "e0c8a23d722a0387bb4cff329d5b7b70c0a4189f8a8ee6b0ad7214f964441376",
+    "benchmark_scripts/consolidate_results.py": "71b20f795e8cff48eb38f98d113906f1e60132b64ff876a721fe475db0480621",
+    "benchmark_scripts/dialog_identity.py": "2ec1b9e0c4ad8e1675b97b93998a69c20965c8343caa379644d1fb66fbf857fe",
+    "benchmark_scripts/f_table.py": "424ccde344df07ec6416e645a6dcb9695c90eda79383b74fa556c0f6a23682a9",
+    "benchmark_scripts/hosted_audit_receipt.py": "3e97f223063b983a29b26a3f3f5754ec5cfa355e4f2b7401399fd986d524a3d1",
+    "benchmark_scripts/hosted_completion_audit_receipt.py": "5c17d6803938afd2a85a566b0cc4faf6c54ce5a28fca7726333d9591c7fa3cf4",
+    "benchmark_scripts/layerwise_fidelity.py": "1c9027db9dfa2cc0cfe7c165761c1e89666ff8baaa4354fead46a4797096c56a",
+    "benchmark_scripts/normalize_segment_outputs.py": "f3065b41cd1162c18407029564633b12e576e6a52605567ff160b1ae3818d696",
+    "benchmark_scripts/provenance_sources.py": "a5253849f60b15f95ad0f4b599d529fe193eccf1e727bed9894cda0c3f4ee9b1",
+    "benchmark_scripts/race_rv.py": "a68f07db379e2333703c33f37d74a1d65d658fd3f25ce60f6dc6f5f759b00185",
+    "benchmark_scripts/run_benchmark.py": "4dc921d4e2ab9271cf7be5060bed628f9de5c85608658edb829cb3f5423616c3",
+    "benchmark_scripts/run_layerwise.py": "fe130758f686f52a3bf2ea1f909cc1753a6de7baa796799cbecbe4d4c8e80c6b",
+    "benchmark_scripts/validate_results.py": "16ec4e042f31d5568d90cad3cda4962eaa7d724b855daa39f605845b671236d5",
+    "surrogate/attention_scoring.py": "8410f770f8b466eb46766e9833a6bcef2772ef2063f80014ef1d1fe30193f553",
+    "surrogate/eval_constants.py": "dd85662e815e073b5ecd43a8c26f9eabc241e135972b3c7ebca59bbf72fc81de",
+    "surrogate/layerwise_scoring.py": "35ff9a62d8e88474441123657ac8b435ea11145e25d30d91020268158e38c227",
+    "surrogate/model_types.py": "a0014380ab6d3b4822d09b5ff22958fa5440702db99ddd6b3412289e0f06dcd1",
+    "surrogate/representation_scoring.py": "50158ca0e0d4616006aee2560efd2209e5deab8750ddbdc6e7d1dc86dac04413",
+    "surrogate/text_augmentation.py": "7a24e5260a736cc845309095ca1e9604c7564e557f9b9a651917e0d1ceb13f4e",
+    "surrogate/transformers_model.py": "ae35c521ededdf5cd05c755ed8ecaa2fdfe813735b1822f9092ea76bd11997f5",
+    "surrogate/transformers_scoring.py": "852300dea8c9831bb5d7c759f6437040342818265b06ab017b25117272ae07ce",
+    "surrogate/utils.py": "3c65316a50837743f5da7d9dfbb2a5a11abe3303bec86120b72bf718453a5098"
   },
   "schema_version": 5,
   "segmentation_scope": "full_dialog_in_message_order",

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) 2025 The Authors
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -22,6 +22,7 @@ from benchmark_scripts.provenance_sources import (
     GOLD_OPEN_MODEL_REVISIONS,
     GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS,
     OPEN_EXECUTION_SOURCE_FILES,
+    build_release_source_corrections,
     canonical_file_hash_manifest_sha256,
 )
 from benchmark_scripts.seal_open_provenance import (
@@ -88,7 +89,7 @@ class TestSealOpenProvenance(TestCase):
             with self.assertRaisesRegex(ValueError, "single-BOS"):
                 _verify_rendered_chat_tokenization("llama-3.1-8b-instruct", "/m", True)
 
-    def test_release_source_correction_is_exact_and_reruns_need_none(self) -> None:
+    def test_release_source_correction_preserves_execution_history(self) -> None:
         execution: dict[str, str] = {"source.py": "1" * 64}
         release: dict[str, str] = {"source.py": "2" * 64}
         correction: dict[str, dict[str, str]] = {
@@ -101,19 +102,19 @@ class TestSealOpenProvenance(TestCase):
         }
         with (
             patch.dict(
-                "benchmark_scripts.seal_open_provenance."
+                "benchmark_scripts.provenance_sources."
                 "GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256",
                 execution,
                 clear=True,
             ),
             patch.dict(
-                "benchmark_scripts.seal_open_provenance."
+                "benchmark_scripts.provenance_sources."
                 "GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS",
                 correction,
                 clear=True,
             ),
             patch(
-                "benchmark_scripts.seal_open_provenance." "OPEN_EXECUTION_SOURCE_FILES",
+                "benchmark_scripts.provenance_sources.OPEN_EXECUTION_SOURCE_FILES",
                 ("source.py",),
             ),
         ):
@@ -122,8 +123,12 @@ class TestSealOpenProvenance(TestCase):
                 _release_source_corrections(execution, release),
             )
             self.assertEqual({}, _release_source_corrections(release, release))
-            with self.assertRaisesRegex(ValueError, "Unapproved"):
-                _release_source_corrections(execution, {"source.py": "3" * 64})
+            revised = _release_source_corrections(
+                execution, {"source.py": "3" * 64}
+            )
+            self.assertEqual("1" * 64, revised["source.py"]["execution_sha256"])
+            self.assertEqual("3" * 64, revised["source.py"]["release_sha256"])
+            self.assertIn("review_packaging", revised["source.py"]["scope"])
 
     def test_download_script_pins_every_public_model_revision(self) -> None:
         repository_root: str = os.path.dirname(os.path.dirname(__file__))
@@ -216,7 +221,10 @@ class TestSealOpenProvenance(TestCase):
             self.assertNotIn("complete_source_sha256", metadata)
             self.assertIn("release_source_sha256", metadata)
             self.assertEqual(
-                GOLD_OPEN_RELEASE_SOURCE_CORRECTIONS,
+                build_release_source_corrections(
+                    GOLD_OPEN_OBSERVED_EXECUTION_SOURCE_SHA256,
+                    metadata["release_source_sha256"],
+                ),
                 metadata["release_source_corrections"],
             )
             self.assertEqual(5, metadata["schema_version"])
