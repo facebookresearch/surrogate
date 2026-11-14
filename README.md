@@ -91,6 +91,7 @@ race_rv             -> results/race_rv.tsv
 anli_rv             -> results/anli_rv.tsv
 run_layerwise       -> results/{benchmark}/{pregrouper}/{model}_layers.tsv.gz
 layerwise_fidelity  -> results/layerwise_fidelity.tsv
+noise_ceiling       -> noise_ceiling/noise_ceiling.tsv, noise_ceiling/noise_ceiling_spread.tsv
 build_layer_control_spec -> layer_controls/layer_control_spec.json
 run_layer_controls  -> external per-model projection tensors
 analyze_layer_controls -> layer_controls/layer_control_fidelity.tsv
@@ -354,7 +355,41 @@ reports only `F_pred` and signed `F_attr`: Glimmer's nonlinear output softcap
 makes the stored fixed-unembedding projection a useful representation
 diagnostic, but not an exact decomposition of output log odds.
 
-### 6. Validate and seal
+### 6. Measure the run-to-run noise ceiling
+
+BoolQ/sentence is re-run five times for every paper-cohort model with the
+published protocol (open models: BF16, batch size 32, pinned and
+hash-verified weights; hosted models: the recorded request and final-audit
+protocol). Hosted request dialogs are exported provider-neutrally and checked
+against the gold receipt's prompt and ablated-dialog identity digests before
+any request is sent:
+
+```bash
+python -m benchmark_scripts.export_hosted_requests \
+    --benchmark boolq --pregrouper sentence \
+    --dataset-file /path/to/google_boolq_validation.tsv \
+    --output boolq_sentence_requests.jsonl
+```
+
+Each repetition is a results root with the usual
+`{benchmark}/{pregrouper}/` raw files, imported, normalized, consolidated,
+and converted to log-odds exactly as in steps 2-3. Then:
+
+```bash
+OMP_NUM_THREADS=1 python -m benchmark_scripts.noise_ceiling \
+    --rep-dirs /path/to/reps/rep1 /path/to/reps/rep2 /path/to/reps/rep3 \
+               /path/to/reps/rep4 /path/to/reps/rep5 \
+    --rep-archive-id surrogate-noise-ceiling-boolq-sentence-v1
+```
+
+`noise_ceiling/noise_ceiling.tsv` reports same-model autocorrelations of every
+F-table signal across runs (published artifact and each repetition), and
+`noise_ceiling/noise_ceiling_spread.tsv` reports the run-to-run spread of every
+canonical BoolQ/sentence F-table estimate. Like the layer controls and the
+Glimmer extension, these live outside `results/`, whose release inventory is
+validated exactly. See [`noise_ceiling/README.md`](noise_ceiling/README.md).
+
+### 7. Validate and seal
 
 ```bash
 python -m benchmark_scripts.validate_results \
