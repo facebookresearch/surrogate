@@ -31,6 +31,8 @@ itself across runs.
 - `noise_ceiling_spread.tsv`: every canonical BoolQ/sentence F-table point
   estimate recomputed on each repetition, beside the published value, with the
   repetition mean, sample SD, range, and minimum joint observation count.
+- `pearson_r2.md`: Pearson r² from `noise_ceiling.tsv` for `F_pred`, `F_attr`,
+  and the representation-level signals.
 - `*.provenance.json`: bind both tables to the published artifact, the SHA-256
   digest of every repetition raw file, the generating source, and all analysis
   parameters. The repetition raw files (about 175 MB) are archived outside Git
