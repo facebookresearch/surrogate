@@ -196,6 +196,19 @@ every other target uses the frozen cut.
 Top-1 chance is 0.26–0.29. The Qwen → GPT-4o row equals `gate_rule.csv`
 (`qwen_only_supported`); `build` stops if it does not.
 
+Figure: `figures/fig_screen.pdf`, the surrogate-only counterpart of
+`fig_trust_gate`.
+- (a) Passage r² against GPT-4o by decile of Qwen's own top passage support
+  (`transfer/support_bins.csv`). It rises from 0.06 in the lowest decile to
+  0.68 in the highest; top-1 match rises from 0.37 to 0.92.
+- (b) Top-sentence match on passing and failing prompts for each hosted
+  target, with word overlap and chance.
+- (c) Prompt 3228, which passes. (d) Prompt 525, a failing prompt chosen by
+  rule: the held-out prompt with the median Qwen support among failing
+  prompts that both models answer correctly, with three to five passage
+  sentences, differing top sentences, and neither top sentence first in the
+  passage. Both answers are carried by the question.
+
 **What it shows.**
 
 - The prompts a surrogate flags on its own are the ones where it matches
@@ -410,6 +423,7 @@ python -m benchmark_scripts.worked_example build
 python -m benchmark_scripts.plot_worked_example
 python -m benchmark_scripts.worked_example inspect 3228 582 2403 1010 923
 python -m benchmark_scripts.screen_transfer   # transfer/ (other targets, Llama-3.1-8B)
+python -m benchmark_scripts.plot_screen_transfer   # figures/fig_screen (surrogate-only screen)
 ```
 
 Screen and figure numbers: `gate_rule.csv` and `gate_bins.csv`. Strata:
