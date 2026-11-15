@@ -160,6 +160,76 @@ is ≤ 2.3 for both. Word overlap gets this one too.
   missing from the shared table. None passes check 2, so they only enter the
   "not passing" rows.
 
+## Transfer: other targets and a second surrogate
+
+The screen above was explored on one pair. Two follow-ups test whether it is
+specific to that pair. Both are reanalyses with no model or API calls
+(`benchmark_scripts/screen_transfer.py`, outputs in `transfer/`).
+
+**Setup.** The rule is check 2 alone: the surrogate's top passage support is
+at least c. For each surrogate, c is the only fitted number, fit on even
+prompts against GPT-4o with the same χ² criterion. All rows are odd prompts;
+every other target uses the frozen cut.
+
+- Qwen2.5-14B: c = 11.5 nats (the Qwen-only cut above), passing 35%.
+- Llama-3.1-8B: c = 4.5 nats, passing 29%. The reversed split also gives 4.5.
+  The cuts are not comparable in nats: Llama's log-odds are about three times
+  smaller (median |ℓ| 6.2 against 20.0).
+
+**Result.** Passing against failing prompts, per target:
+
+| Surrogate | Target | Passage r² | Top-1 | Word overlap (pass) |
+|---|---|---|---|---|
+| Qwen2.5-14B | GPT-4o (fitted) | 0.56 / 0.15 | 0.78 / 0.47 | 0.65 |
+| | GPT-4.1 | 0.42 / 0.11 | 0.75 / 0.41 | 0.58 |
+| | Gemini 2.5 Flash Lite | 0.60 / 0.15 | 0.81 / 0.47 | 0.63 |
+| | Llama-3.1-70B | 0.61 / 0.22 | 0.84 / 0.54 | 0.64 |
+| | Llama-3.3-70B | 0.64 / 0.23 | 0.84 / 0.53 | 0.64 |
+| | Llama-4 Maverick | 0.59 / 0.17 | 0.79 / 0.50 | 0.62 |
+| Llama-3.1-8B | GPT-4o (fitted) | 0.48 / 0.12 | 0.82 / 0.43 | 0.64 |
+| | GPT-4.1 | 0.39 / 0.08 | 0.71 / 0.42 | 0.60 |
+| | Gemini 2.5 Flash Lite | 0.58 / 0.13 | 0.85 / 0.43 | 0.67 |
+| | Llama-3.1-70B | 0.58 / 0.16 | 0.83 / 0.50 | 0.65 |
+| | Llama-3.3-70B | 0.60 / 0.16 | 0.86 / 0.48 | 0.66 |
+| | Llama-4 Maverick | 0.57 / 0.15 | 0.82 / 0.47 | 0.65 |
+
+Top-1 chance is 0.26–0.29. The Qwen → GPT-4o row equals `gate_rule.csv`
+(`qwen_only_supported`); `build` stops if it does not.
+
+**What it shows.**
+
+- The prompts a surrogate flags on its own are the ones where it matches
+  every hosted target, not only the one the cut was fit on.
+- The rule form carries to a second surrogate from another family with one
+  re-fit number. The form was never tuned on Llama-3.1-8B.
+- On flagged prompts the surrogate is about as good a stand-in as a second
+  hosted model. Hosted–hosted pairs on Qwen's flagged prompts have median
+  top-1 0.76 and r² 0.58, against 0.48 and 0.26 on the rest
+  (`hosted_pairs.csv`).
+
+**Claim limits.**
+
+- The screen detects something partly about the prompt and partly about the
+  surrogate. Hosted–hosted pairs split on the surrogate's flags (above), but
+  the two surrogates' flags only partly coincide: Jaccard 0.45 on held-out
+  prompts (20% flagged by both, 15% by Qwen only, 9% by Llama only). Where
+  both flag, they name the same top sentence 93% of the time and each matches
+  the targets at 0.78–0.92 (`flag_overlap.csv`).
+- It is a screen for True answers, for both surrogates and every target. When
+  the surrogate answers True, top-1 is 0.74–0.90 on passing prompts against
+  0.33–0.57 on failing ones. When it answers False (12–18% of passing
+  prompts) it is 0.49–0.69 against 0.42–0.53, and Qwen → Gemini shows almost
+  no effect.
+- No family advantage: on the three Llama targets Llama-3.1-8B reaches
+  0.82–0.86 top-1 on its flagged prompts and Qwen2.5-14B 0.79–0.84 on its
+  own. Without a screen Qwen2.5-14B is the better surrogate for them.
+- The cut must be re-fit per surrogate. Qwen's 11.5 nats passes only 7–8% of
+  Llama's prompts.
+- No per-target noise ceiling is reported here: it needs each target's
+  repeat runs, which are outside the repo. GPT-4.1 is scored on about 80% of
+  prompts because of missing labels.
+- The rule's form still comes from exploring Qwen → GPT-4o.
+
 ## Competing explanations
 
 After the first draft, two more readers went through the prompts. A skeptic
@@ -339,6 +409,7 @@ python -m benchmark_scripts.worked_example extract-repeats --reps-dir <noise-cei
 python -m benchmark_scripts.worked_example build
 python -m benchmark_scripts.plot_worked_example
 python -m benchmark_scripts.worked_example inspect 3228 582 2403 1010 923
+python -m benchmark_scripts.screen_transfer   # transfer/ (other targets, Llama-3.1-8B)
 ```
 
 Screen and figure numbers: `gate_rule.csv` and `gate_bins.csv`. Strata:

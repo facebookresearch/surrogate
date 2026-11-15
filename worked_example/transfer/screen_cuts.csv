@@ -1,0 +1,3 @@
+surrogate,fit_target,support_cut_nats,support_cut_nats_reversed_split,coverage_even,coverage_odd,median_abs_logodds,median_support
+qwen2.5-14b-instruct,gpt-4o,11.5,9.5,0.375609756097561,0.35306553911205074,19.99999996929411,6.750000095755127
+llama-3.1-8b-instruct,gpt-4o,4.5,4.5,0.3087108013937282,0.2952783650458069,6.186625086670082,2.3113206784615996

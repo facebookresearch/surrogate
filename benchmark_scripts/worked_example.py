@@ -46,7 +46,7 @@ import sys
 
 import numpy as np
 import pandas as pd
-from benchmark_scripts.reanalysis_rebuttal import load_signals, segment_parts
+from benchmark_scripts.reanalysis_rebuttal import Signals, load_signals, segment_parts
 
 SOURCE: str = "qwen2.5-14b-instruct"
 TARGET: str = "gpt-4o"
@@ -62,9 +62,27 @@ SEED: int = 0
 
 def pair_segments(
     results_dir: str,
+    source: str = SOURCE,
+    target: str = TARGET,
+    signals: Signals | None = None,
 ) -> tuple[pd.DataFrame, pd.Series, pd.Series, pd.Series]:
-    """Return the shared segment table plus ℓ_S, ℓ_T and gold, indexed by prompt."""
-    signals = load_signals(results_dir)
+    """
+    Return the shared segment table plus ℓ_S, ℓ_T and gold, indexed by prompt.
+
+    Columns keep the ``_qwen`` (source) and ``_gpt`` (target) suffixes for any
+    pair, so the per-prompt and screen functions apply unchanged.
+
+    Args:
+        results_dir: Result root (see :func:`load_signals`).
+        source: Open surrogate model.
+        target: Target model.
+        signals: Already-loaded signals, to avoid reloading for several pairs.
+
+    Returns:
+        The shared segment table, ℓ_S, ℓ_T and gold.
+    """
+    if signals is None:
+        signals = load_signals(results_dir)
     manifest: pd.DataFrame = pd.read_csv(
         os.path.join(results_dir, "boolq", "sentence", "segments.tsv.gz"), sep="\t"
     )
@@ -73,13 +91,13 @@ def pair_segments(
     attr = signals.segment["F_attr"]
     frame = pd.DataFrame(
         {
-            "d_qwen": attr[SOURCE],
-            "d_gpt": attr[TARGET],
-            "align_qwen": signals.segment["F_align"][SOURCE],
-            "attn_mean_qwen": signals.segment["F_attn_mean"][SOURCE],
-            "attn_max_qwen": signals.segment["F_attn_max"][SOURCE],
-            "attn_rollout_qwen": signals.segment["F_attn_rollout"][SOURCE],
-            "dz_norm_qwen": signals.segment["F_mag"][SOURCE],
+            "d_qwen": attr[source],
+            "d_gpt": attr[target],
+            "align_qwen": signals.segment["F_align"][source],
+            "attn_mean_qwen": signals.segment["F_attn_mean"][source],
+            "attn_max_qwen": signals.segment["F_attn_max"][source],
+            "attn_rollout_qwen": signals.segment["F_attn_rollout"][source],
+            "dz_norm_qwen": signals.segment["F_mag"][source],
         }
     )
     frame.index = frame.index.set_names(["prompt_idx", "seg_idx"])
@@ -91,8 +109,8 @@ def pair_segments(
     frame = frame[shared].reset_index()
     return (
         frame,
-        signals.prediction[SOURCE],
-        signals.prediction[TARGET],
+        signals.prediction[source],
+        signals.prediction[target],
         signals.gold,
     )
 
