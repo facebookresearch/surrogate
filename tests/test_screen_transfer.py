@@ -11,6 +11,7 @@ from unittest import TestCase
 
 import numpy as np
 import pandas as pd
+from benchmark_scripts.screen_quantile import top_share_flags
 from benchmark_scripts.screen_transfer import (
     fit_support_cut,
     flag_groups,
@@ -140,3 +141,11 @@ class TestScreenTransfer(TestCase):
         self.assertEqual(rows["fail"]["n_prompts"], 3)
         self.assertAlmostEqual(rows["pass"]["coverage"], 0.5)
         self.assertEqual(rows["pass_answer_false"]["n_prompts"], 0)
+
+    def test_top_share_flags_takes_the_top_third(self) -> None:
+        support = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
+        flags = top_share_flags(support)
+        self.assertEqual(int(flags.sum()), 3)
+        self.assertEqual(support[flags].tolist(), [7.0, 8.0, 9.0])
+        # Any share can be requested; prompts at the quantile are flagged.
+        self.assertEqual(int(top_share_flags(support, 0.5).sum()), 5)

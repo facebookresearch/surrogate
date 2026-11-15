@@ -196,16 +196,33 @@ every other target uses the frozen cut.
 Top-1 chance is 0.26–0.29. The Qwen → GPT-4o row equals `gate_rule.csv`
 (`qwen_only_supported`); `build` stops if it does not.
 
+**With nothing fitted.** `benchmark_scripts/screen_quantile.py` replaces the
+fitted cut with a fixed rule: flag the top third of prompts by the surrogate's
+support (computed over all of its own passage sentences, so the flag does not
+depend on the target). No number is tuned, no held-out split is needed, and
+all prompts are used. Outputs: `transfer/third_*.csv`.
+
+- Qwen2.5-14B (top third is support ≥ 13.2 nats): top-1 0.76–0.86 on flagged
+  prompts against 0.43–0.53 on the rest; passage r² 0.45–0.63 against
+  0.11–0.22.
+- Llama-3.1-8B (≥ 4.0 nats): top-1 0.70–0.84 against 0.42–0.48; r² 0.40–0.59
+  against 0.08–0.16.
+- The relationship is graded. For Qwen → GPT-4o, passage r² rises from under
+  0.1 in the lowest three ninths of support to 0.68 in the highest, and top-1
+  from 0.41 to 0.93 (`third_bins.csv`).
+- When the target is wrong, the surrogate helps only if it gives the same
+  wrong answer: top-1 on flagged prompts is 0.66–0.80 (Qwen) when it does and
+  0.40–0.49 when it answers correctly, which is no better than unflagged
+  prompts.
+
 Figure: `figures/fig_screen.pdf`, the surrogate-only counterpart of
-`fig_trust_gate`.
-- (a) Passage r² against GPT-4o by decile of Qwen's own top passage support
-  (`transfer/support_bins.csv`). It rises from 0.06 in the lowest decile to
-  0.68 in the highest; top-1 match rises from 0.37 to 0.92.
-- (b) Top-sentence match on passing and failing prompts for each hosted
+`fig_trust_gate`, drawn from the nothing-fitted tables.
+- (a) Passage r² against GPT-4o by ninth of Qwen's own top passage support.
+- (b) Top-sentence match on the top third and on the rest for each hosted
   target, with word overlap and chance.
-- (c) Prompt 3228, which passes. (d) Prompt 525, a failing prompt chosen by
-  rule: the held-out prompt with the median Qwen support among failing
-  prompts that both models answer correctly, with three to five passage
+- (c) Prompt 3228, in the top third. (d) Prompt 525, chosen by rule: the
+  held-out prompt with the median Qwen support among prompts below the fitted
+  cut that both models answer correctly, with three to five passage
   sentences, differing top sentences, and neither top sentence first in the
   passage. Both answers are carried by the question.
 
@@ -423,6 +440,7 @@ python -m benchmark_scripts.worked_example build
 python -m benchmark_scripts.plot_worked_example
 python -m benchmark_scripts.worked_example inspect 3228 582 2403 1010 923
 python -m benchmark_scripts.screen_transfer   # transfer/ (other targets, Llama-3.1-8B)
+python -m benchmark_scripts.screen_quantile   # transfer/third_* (top third by support, nothing fitted)
 python -m benchmark_scripts.plot_screen_transfer   # figures/fig_screen (surrogate-only screen)
 ```
 
