@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
@@ -109,6 +110,16 @@ ROW_COLUMNS: list[str] = [
 ]
 SUMMARY_KEYS: list[str] = ["analysis", "metric", "variant", "statistic"]
 TIE_SEED: int = 0
+# Analysis 7's no-model baseline picks the passage sentence sharing the most
+# content words with the question.
+STOPWORDS: frozenset[str] = frozenset(
+    """a an the is are was were be been being do does did has have had can could
+    will would shall should may might must of in on at to for from by with as and
+    or but if then than that this these those it its into onto over under about
+    who whom whose which what when where why how there their they them he she his
+    her him i you your we our us not no any ever get got one also just very more
+    most such own same so too s t context question""".split()
+)
 TOP_K: int = 3
 N_CONFIDENCE_BINS: int = 5
 ANALYSES: tuple[str, ...] = (
@@ -137,7 +148,8 @@ class Signals:
             ``(prompt_idx, seg_idx)``; ``F_attr`` holds attribution for every
             model, the representation metrics hold open-model signals.
         segments: Coordinate metadata indexed by ``(prompt_idx, seg_idx)`` with
-            ``part`` (system / passage / question) and ``n_words``.
+            ``part`` (system / passage / question), ``n_words`` and
+            ``question_overlap`` (content words shared with the question).
         gold: Gold answer per prompt.
     """
 
@@ -190,6 +202,42 @@ def segment_parts(segments: pd.DataFrame) -> pd.Series:
         np.where(segments["seg_idx"].to_numpy() >= start, "question", "passage"),
     )
     return pd.Series(part, index=segments.index, name="part")
+
+
+def content_words(text: object) -> set[str]:
+    """Lower-cased content words of ``text``, with a crude plural strip."""
+    words = re.findall(r"[a-z0-9]+", text.lower()) if isinstance(text, str) else []
+    return {
+        w[:-1] if len(w) > 3 and w.endswith("s") else w
+        for w in words
+        if w not in STOPWORDS
+    }
+
+
+def question_overlap(segments: pd.DataFrame) -> pd.Series:
+    """
+    Count each segment's content words shared with its prompt's question.
+
+    Args:
+        segments: Rows with ``prompt_idx``, ``part`` and ``segment_text``.
+
+    Returns:
+        Overlap counts aligned with ``segments``.
+    """
+    questions: pd.Series = (
+        segments[segments["part"].eq("question")]
+        .groupby("prompt_idx")["segment_text"]
+        .agg(" ".join)
+        .map(content_words)
+    )
+    return pd.Series(
+        [
+            len(content_words(text) & questions.get(prompt, set()))
+            for prompt, text in zip(segments["prompt_idx"], segments["segment_text"])
+        ],
+        index=segments.index,
+        dtype=float,
+    )
 
 
 def load_signals(results_dir: str) -> Signals:
@@ -264,8 +312,9 @@ def load_signals(results_dir: str) -> Signals:
     )
     manifest["part"] = segment_parts(manifest)
     manifest["n_words"] = manifest["segment_text"].str.split().str.len().clip(lower=1)
+    manifest["question_overlap"] = question_overlap(manifest)
     segments: pd.DataFrame = manifest.set_index(["prompt_idx", "seg_idx"])[
-        ["answer", "message_role", "part", "n_words"]
+        ["answer", "message_role", "part", "n_words", "question_overlap"]
     ]
     gold: pd.Series = manifest.groupby("prompt_idx")["answer"].first().astype(bool)
     return Signals(prediction, segment, segments, gold)
@@ -969,6 +1018,7 @@ def decisive_agreement(
     source_column: str = "ax",
     target_column: str = "ay",
     parts: pd.Series | None = None,
+    baseline: pd.Series | None = None,
 ) -> list[dict[str, str | float | int]]:
     """
     Top-1 and top-3 decisive-segment agreement, overall and by confidence.
@@ -982,6 +1032,10 @@ def decisive_agreement(
         target_column: Ranking column of model T.
         parts: Optional segment part (system / passage / question) indexed by
             ``(prompt_idx, seg_idx)``.
+        baseline: Optional no-model score indexed by ``(prompt_idx, seg_idx)``;
+            its top segment per prompt is compared with the target's. When k
+            segments tie for its maximum, a match counts 1/k: the expected
+            top-1 agreement under a random tie-break, with no randomness.
 
     Returns:
         One record per stratum (``all`` and confidence quintiles ``q1``-``q5``,
@@ -989,8 +1043,10 @@ def decisive_agreement(
         ``1/N``), top-3 overlap fraction, its chance level (mean of ``3/N``),
         the share of prompts whose maximum is tied for either model, and, when
         ``parts`` is given, the share of prompts whose top segment is the
-        question for each model. The target's share is the top-1 agreement of
-        a role-aware baseline that always picks the question segment.
+        question, and the system prompt, for each model. The target's question
+        share is the top-1 agreement of a role-aware baseline that always
+        picks the question segment. With ``baseline``, also the top-1
+        agreement of the baseline's pick with the target.
     """
     sizes: pd.Series = frame.groupby("prompt_idx").size()
     prompts: pd.Index = sizes.index[sizes.to_numpy() >= 2]
@@ -1016,15 +1072,29 @@ def decisive_agreement(
         index=prompts,
     )
     for side, top1 in (("source", top1_s), ("target", top1_t)):
-        if parts is None:
-            per_prompt[f"{side}_top_question"] = np.nan
-            continue
-        keys = pd.MultiIndex.from_arrays(
-            [prompts, [next(iter(top1[p])) for p in prompts]]
+        for part in ("question", "system"):
+            if parts is None:
+                per_prompt[f"{side}_top_{part}"] = np.nan
+                continue
+            keys = pd.MultiIndex.from_arrays(
+                [prompts, [next(iter(top1[p])) for p in prompts]]
+            )
+            per_prompt[f"{side}_top_{part}"] = parts.reindex(keys).eq(part).to_numpy()
+    per_prompt["baseline_match"] = np.nan
+    if baseline is not None:
+        score = pd.Series(
+            baseline.reindex(frame.index).to_numpy(), index=frame.index
+        ).fillna(-np.inf)
+        best = score.eq(score.groupby(frame["prompt_idx"].to_numpy()).transform("max"))
+        ties = (
+            frame.index[best.to_numpy()]
+            .to_frame(index=False)
+            .groupby(0)[1]
+            .agg(frozenset)
         )
-        per_prompt[f"{side}_top_question"] = (
-            parts.reindex(keys).eq("question").to_numpy()
-        )
+        per_prompt["baseline_match"] = [
+            len(ties[p] & top1_t[p]) / len(ties[p]) for p in prompts
+        ]
     rated: pd.DataFrame = per_prompt[per_prompt["confidence"].notna()]
     per_prompt["stratum"] = pd.Series(dtype=object)
     if len(rated) >= N_CONFIDENCE_BINS:
@@ -1055,6 +1125,9 @@ def decisive_agreement(
                 "share_prompts_tied_max": group["tied"].mean(),
                 "share_source_top_question": group["source_top_question"].mean(),
                 "share_target_top_question": group["target_top_question"].mean(),
+                "share_source_top_system": group["source_top_system"].mean(),
+                "share_target_top_system": group["target_top_system"].mean(),
+                "top1_overlap_baseline": group["baseline_match"].astype(float).mean(),
             }
         )
     return records
@@ -1071,6 +1144,7 @@ def decisive_segments(signals: Signals) -> pd.DataFrame:
         ).dropna() / 2.0
 
     parts: pd.Series = signals.segments["part"]
+    overlap: pd.Series = signals.segments["question_overlap"]
     passage: pd.Index = passage_keys(signals)
 
     def emit(
@@ -1082,7 +1156,17 @@ def decisive_segments(signals: Signals) -> pd.DataFrame:
         conf: pd.Series,
     ) -> None:
         rng = _analysis_rng(TIE_SEED, "decisive_segments", comparison, scope, a, b)
-        for record in decisive_agreement(frame, conf, rng, parts=parts):
+        # Overlap with the question is only a baseline for passage sentences:
+        # over all segments the question trivially overlaps itself, and the
+        # question-top share already plays that role.
+        passage_scope = scope == "passage_only"
+        for record in decisive_agreement(
+            frame,
+            conf,
+            rng,
+            parts=parts,
+            baseline=overlap if passage_scope else None,
+        ):
             rows.append(
                 {
                     "analysis": "decisive_segments",
@@ -1661,11 +1745,15 @@ def write_report(
         "at random with a fixed seed. Chance is the mean of 1/N (top-1) and 3/N",
         "(top-3 overlap fraction). 'Q-top' is the share of prompts whose target",
         "top segment is the question, i.e. the top-1 agreement of always picking",
-        "the question. Confidence quintiles use the mean |ℓ| of the two models",
+        "the question. 'S-top' is the same share for the system prompt.",
+        "'Overlap' (passage rows only) is the top-1 agreement of a no-model",
+        "baseline that picks the passage sentence sharing the most content words",
+        "with the question (stopwords removed, crude plural strip; k tied",
+        "sentences share credit 1/k). Confidence quintiles use the mean |ℓ| of the two models",
         "(q5 most confident).",
         "",
-        "| Scope | Pair set | Stratum | Top-1 | Chance | Q-top | Top-3 | Chance |",
-        "|---|---|---|---:|---:|---:|---:|---:|",
+        "| Scope | Pair set | Stratum | Top-1 | Chance | Q-top | S-top | Overlap | Top-3 | Chance |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for scope in ("all_segments", "passage_only"):
         for pair_set in PAIR_SETS:
@@ -1683,6 +1771,8 @@ def write_report(
                     f"| {scope} | {PAIR_SET_LABELS[pair_set]} | {stratum} | "
                     f"{r['top1_agreement']:.3f} | {r['top1_chance']:.3f} | "
                     f"{r['share_target_top_question']:.3f} | "
+                    f"{r['share_target_top_system']:.3f} | "
+                    f"{_fmt3(r['top1_overlap_baseline'])} | "
                     f"{r['top3_overlap']:.3f} | {r['top3_chance']:.3f} |"
                 )
     lines += [
@@ -1690,8 +1780,8 @@ def write_report(
         "Qwen2.5-14B → GPT-4o. Rows `F_attn_*` rank Qwen-14B's segments by",
         "attention and GPT-4o's by |Δℓ|.",
         "",
-        "| Comparison | Scope | Stratum | Top-1 | Chance | Q-top | Top-3 | Chance | n |",
-        "|---|---|---|---:|---:|---:|---:|---:|---:|",
+        "| Comparison | Scope | Stratum | Top-1 | Chance | Q-top | S-top | Overlap | Top-3 | Chance | n |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     highlight_rows = detail[
         detail["model_s"].eq("qwen2.5-14b-instruct") & detail["model_t"].eq("gpt-4o")
@@ -1702,11 +1792,17 @@ def write_report(
         lines.append(
             f"| {r.comparison} | {r.scope} | {r.stratum} | {r.top1_agreement:.3f} | "
             f"{r.top1_chance:.3f} | {r.share_target_top_question:.3f} | "
+            f"{r.share_target_top_system:.3f} | {_fmt3(r.top1_overlap_baseline)} | "
             f"{r.top3_overlap:.3f} | {r.top3_chance:.3f} | {r.n_prompts} |"
         )
     lines.append("")
     with open(path, "w", encoding="utf-8") as sink:
         sink.write("\n".join(lines) + "\n")
+
+
+def _fmt3(value: float) -> str:
+    """Three decimals, or an em dash for a missing value."""
+    return "—" if pd.isna(value) else f"{value:.3f}"
 
 
 def summarize_decisive(rows: pd.DataFrame) -> pd.DataFrame:
@@ -1719,6 +1815,9 @@ def summarize_decisive(rows: pd.DataFrame) -> pd.DataFrame:
         "share_prompts_tied_max",
         "share_source_top_question",
         "share_target_top_question",
+        "share_source_top_system",
+        "share_target_top_system",
+        "top1_overlap_baseline",
     ]
     for (comparison, scope, stratum), group in rows.groupby(
         ["comparison", "scope", "stratum"], sort=False

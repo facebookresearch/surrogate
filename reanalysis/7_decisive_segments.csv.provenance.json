@@ -3,7 +3,7 @@
   "generator": {
     "module": "benchmark_scripts.reanalysis_rebuttal",
     "provenance_writer_sha256": "a61dc3d512acf567d255528ad56a6a95d81d9dec9047b4d00f07589da94ba50b",
-    "source_sha256": "bbd3eda890de3fda1918d524f6c35c263f7d06974b9c03ee4f4304fc78ba82a7"
+    "source_sha256": "1c74d60fdb08ebe8615895c71f1cf7b9132bb0739f6f1477f04a8b716a61272b"
   },
   "inputs": {
     "boolq/sentence/raw/gemini-2-5-flash-lite-vertex_run.json": {
@@ -204,8 +204,8 @@
   },
   "output": {
     "path": "reanalysis/7_decisive_segments.csv",
-    "sha256": "90b6a6abef236d731d3167342c6e18b3f5ad1df6f2e507fa015936fe54397abc",
-    "size_bytes": 561686
+    "sha256": "0641007ef0253002d25108e3c284c10e0774e328e95ec6f48f6c628d1f38fc99",
+    "size_bytes": 613031
   },
   "parameters": {
     "api_infinity_policy": "pairwise_complete",

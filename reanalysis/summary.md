@@ -288,69 +288,73 @@ source, in attention rows) over the pair's shared finite segments
 at random with a fixed seed. Chance is the mean of 1/N (top-1) and 3/N
 (top-3 overlap fraction). 'Q-top' is the share of prompts whose target
 top segment is the question, i.e. the top-1 agreement of always picking
-the question. Confidence quintiles use the mean |ℓ| of the two models
+the question. 'S-top' is the same share for the system prompt.
+'Overlap' (passage rows only) is the top-1 agreement of a no-model
+baseline that picks the passage sentence sharing the most content words
+with the question (stopwords removed, crude plural strip; k tied
+sentences share credit 1/k). Confidence quintiles use the mean |ℓ| of the two models
 (q5 most confident).
 
-| Scope | Pair set | Stratum | Top-1 | Chance | Q-top | Top-3 | Chance |
-|---|---|---|---:|---:|---:|---:|---:|
-| all_segments | Open→Open | all | 0.511 | 0.129 | 0.577 | 0.596 | 0.386 |
-| all_segments | Open→Open | q1 | 0.330 | 0.127 | 0.239 | 0.523 | 0.382 |
-| all_segments | Open→Open | q3 | 0.486 | 0.128 | 0.688 | 0.609 | 0.384 |
-| all_segments | Open→Open | q5 | 0.744 | 0.131 | 0.778 | 0.597 | 0.393 |
-| all_segments | Open→Closed | all | 0.573 | 0.138 | 0.612 | 0.607 | 0.413 |
-| all_segments | Open→Closed | q1 | 0.335 | 0.132 | 0.250 | 0.525 | 0.397 |
-| all_segments | Open→Closed | q3 | 0.608 | 0.135 | 0.698 | 0.618 | 0.401 |
-| all_segments | Open→Closed | q5 | 0.758 | 0.142 | 0.818 | 0.658 | 0.419 |
-| all_segments | All | all | 0.618 | 0.138 | 0.607 | 0.612 | 0.414 |
-| all_segments | All | q1 | 0.340 | 0.132 | 0.241 | 0.529 | 0.397 |
-| all_segments | All | q3 | 0.656 | 0.135 | 0.677 | 0.624 | 0.402 |
-| all_segments | All | q5 | 0.776 | 0.142 | 0.773 | 0.662 | 0.421 |
-| passage_only | Open→Open | all | 0.542 | 0.271 | 0.000 | 0.649 | 0.562 |
-| passage_only | Open→Open | q1 | 0.539 | 0.265 | 0.000 | 0.639 | 0.542 |
-| passage_only | Open→Open | q3 | 0.533 | 0.269 | 0.000 | 0.649 | 0.562 |
-| passage_only | Open→Open | q5 | 0.535 | 0.282 | 0.000 | 0.664 | 0.587 |
-| passage_only | Open→Closed | all | 0.555 | 0.271 | 0.000 | 0.633 | 0.562 |
-| passage_only | Open→Closed | q1 | 0.510 | 0.272 | 0.000 | 0.625 | 0.555 |
-| passage_only | Open→Closed | q3 | 0.562 | 0.269 | 0.000 | 0.630 | 0.558 |
-| passage_only | Open→Closed | q5 | 0.605 | 0.279 | 0.000 | 0.650 | 0.584 |
-| passage_only | All | all | 0.560 | 0.271 | 0.000 | 0.641 | 0.562 |
-| passage_only | All | q1 | 0.516 | 0.272 | 0.000 | 0.632 | 0.555 |
-| passage_only | All | q3 | 0.566 | 0.269 | 0.000 | 0.634 | 0.558 |
-| passage_only | All | q5 | 0.606 | 0.280 | 0.000 | 0.656 | 0.584 |
+| Scope | Pair set | Stratum | Top-1 | Chance | Q-top | S-top | Overlap | Top-3 | Chance |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| all_segments | Open→Open | all | 0.511 | 0.129 | 0.577 | 0.030 | — | 0.596 | 0.386 |
+| all_segments | Open→Open | q1 | 0.330 | 0.127 | 0.239 | 0.076 | — | 0.523 | 0.382 |
+| all_segments | Open→Open | q3 | 0.486 | 0.128 | 0.688 | 0.011 | — | 0.609 | 0.384 |
+| all_segments | Open→Open | q5 | 0.744 | 0.131 | 0.778 | 0.009 | — | 0.597 | 0.393 |
+| all_segments | Open→Closed | all | 0.573 | 0.138 | 0.612 | 0.083 | — | 0.607 | 0.413 |
+| all_segments | Open→Closed | q1 | 0.335 | 0.132 | 0.250 | 0.197 | — | 0.525 | 0.397 |
+| all_segments | Open→Closed | q3 | 0.608 | 0.135 | 0.698 | 0.032 | — | 0.618 | 0.401 |
+| all_segments | Open→Closed | q5 | 0.758 | 0.142 | 0.818 | 0.002 | — | 0.658 | 0.419 |
+| all_segments | All | all | 0.618 | 0.138 | 0.607 | 0.062 | — | 0.612 | 0.414 |
+| all_segments | All | q1 | 0.340 | 0.132 | 0.241 | 0.168 | — | 0.529 | 0.397 |
+| all_segments | All | q3 | 0.656 | 0.135 | 0.677 | 0.037 | — | 0.624 | 0.402 |
+| all_segments | All | q5 | 0.776 | 0.142 | 0.773 | 0.006 | — | 0.662 | 0.421 |
+| passage_only | Open→Open | all | 0.542 | 0.271 | 0.000 | 0.000 | 0.506 | 0.649 | 0.562 |
+| passage_only | Open→Open | q1 | 0.539 | 0.265 | 0.000 | 0.000 | 0.475 | 0.639 | 0.542 |
+| passage_only | Open→Open | q3 | 0.533 | 0.269 | 0.000 | 0.000 | 0.489 | 0.649 | 0.562 |
+| passage_only | Open→Open | q5 | 0.535 | 0.282 | 0.000 | 0.000 | 0.546 | 0.664 | 0.587 |
+| passage_only | Open→Closed | all | 0.555 | 0.271 | 0.000 | 0.000 | 0.510 | 0.633 | 0.562 |
+| passage_only | Open→Closed | q1 | 0.510 | 0.272 | 0.000 | 0.000 | 0.456 | 0.625 | 0.555 |
+| passage_only | Open→Closed | q3 | 0.562 | 0.269 | 0.000 | 0.000 | 0.488 | 0.630 | 0.558 |
+| passage_only | Open→Closed | q5 | 0.605 | 0.279 | 0.000 | 0.000 | 0.582 | 0.650 | 0.584 |
+| passage_only | All | all | 0.560 | 0.271 | 0.000 | 0.000 | 0.504 | 0.641 | 0.562 |
+| passage_only | All | q1 | 0.516 | 0.272 | 0.000 | 0.000 | 0.458 | 0.632 | 0.555 |
+| passage_only | All | q3 | 0.566 | 0.269 | 0.000 | 0.000 | 0.487 | 0.634 | 0.558 |
+| passage_only | All | q5 | 0.606 | 0.280 | 0.000 | 0.000 | 0.578 | 0.656 | 0.584 |
 
 Qwen2.5-14B → GPT-4o. Rows `F_attn_*` rank Qwen-14B's segments by
 attention and GPT-4o's by |Δℓ|.
 
-| Comparison | Scope | Stratum | Top-1 | Chance | Q-top | Top-3 | Chance | n |
-|---|---|---|---:|---:|---:|---:|---:|---:|
-| abs_attr_vs_abs_attr | all_segments | all | 0.667 | 0.140 | 0.617 | 0.612 | 0.414 | 3096 |
-| abs_attr_vs_abs_attr | all_segments | q1 | 0.381 | 0.132 | 0.202 | 0.531 | 0.397 | 620 |
-| abs_attr_vs_abs_attr | all_segments | q2 | 0.477 | 0.133 | 0.447 | 0.598 | 0.398 | 619 |
-| abs_attr_vs_abs_attr | all_segments | q3 | 0.703 | 0.133 | 0.706 | 0.628 | 0.399 | 619 |
-| abs_attr_vs_abs_attr | all_segments | q4 | 0.848 | 0.136 | 0.819 | 0.647 | 0.407 | 619 |
-| abs_attr_vs_abs_attr | all_segments | q5 | 0.926 | 0.165 | 0.911 | 0.657 | 0.471 | 619 |
-| F_attn_mean_vs_abs_attr | all_segments | all | 0.616 | 0.140 | 0.617 | 0.566 | 0.414 | 3096 |
-| F_attn_mean_vs_abs_attr | all_segments | q1 | 0.202 | 0.132 | 0.202 | 0.515 | 0.397 | 620 |
-| F_attn_mean_vs_abs_attr | all_segments | q5 | 0.911 | 0.165 | 0.911 | 0.631 | 0.471 | 619 |
-| F_attn_max_vs_abs_attr | all_segments | all | 0.059 | 0.140 | 0.617 | 0.575 | 0.414 | 3096 |
-| F_attn_max_vs_abs_attr | all_segments | q1 | 0.069 | 0.132 | 0.202 | 0.530 | 0.397 | 620 |
-| F_attn_max_vs_abs_attr | all_segments | q5 | 0.040 | 0.165 | 0.911 | 0.626 | 0.471 | 619 |
-| F_attn_rollout_vs_abs_attr | all_segments | all | 0.005 | 0.140 | 0.617 | 0.327 | 0.414 | 3096 |
-| F_attn_rollout_vs_abs_attr | all_segments | q1 | 0.010 | 0.132 | 0.202 | 0.357 | 0.397 | 620 |
-| F_attn_rollout_vs_abs_attr | all_segments | q5 | 0.002 | 0.165 | 0.911 | 0.374 | 0.471 | 619 |
-| abs_attr_vs_abs_attr | passage_only | all | 0.585 | 0.278 | 0.000 | 0.622 | 0.569 | 2854 |
-| abs_attr_vs_abs_attr | passage_only | q1 | 0.576 | 0.272 | 0.000 | 0.610 | 0.555 | 571 |
-| abs_attr_vs_abs_attr | passage_only | q2 | 0.587 | 0.275 | 0.000 | 0.622 | 0.553 | 571 |
-| abs_attr_vs_abs_attr | passage_only | q3 | 0.560 | 0.274 | 0.000 | 0.630 | 0.560 | 570 |
-| abs_attr_vs_abs_attr | passage_only | q4 | 0.608 | 0.267 | 0.000 | 0.614 | 0.573 | 571 |
-| abs_attr_vs_abs_attr | passage_only | q5 | 0.595 | 0.301 | 0.000 | 0.639 | 0.608 | 571 |
-| F_attn_mean_vs_abs_attr | passage_only | all | 0.426 | 0.278 | 0.000 | 0.611 | 0.569 | 2854 |
-| F_attn_mean_vs_abs_attr | passage_only | q1 | 0.441 | 0.272 | 0.000 | 0.618 | 0.555 | 571 |
-| F_attn_mean_vs_abs_attr | passage_only | q5 | 0.431 | 0.301 | 0.000 | 0.638 | 0.608 | 571 |
-| F_attn_max_vs_abs_attr | passage_only | all | 0.480 | 0.278 | 0.000 | 0.622 | 0.569 | 2854 |
-| F_attn_max_vs_abs_attr | passage_only | q1 | 0.499 | 0.272 | 0.000 | 0.634 | 0.555 | 571 |
-| F_attn_max_vs_abs_attr | passage_only | q5 | 0.469 | 0.301 | 0.000 | 0.647 | 0.608 | 571 |
-| F_attn_rollout_vs_abs_attr | passage_only | all | 0.409 | 0.278 | 0.000 | 0.592 | 0.569 | 2854 |
-| F_attn_rollout_vs_abs_attr | passage_only | q1 | 0.378 | 0.272 | 0.000 | 0.557 | 0.555 | 571 |
-| F_attn_rollout_vs_abs_attr | passage_only | q5 | 0.462 | 0.301 | 0.000 | 0.642 | 0.608 | 571 |
+| Comparison | Scope | Stratum | Top-1 | Chance | Q-top | S-top | Overlap | Top-3 | Chance | n |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| abs_attr_vs_abs_attr | all_segments | all | 0.667 | 0.140 | 0.617 | 0.104 | — | 0.612 | 0.414 | 3096 |
+| abs_attr_vs_abs_attr | all_segments | q1 | 0.381 | 0.132 | 0.202 | 0.277 | — | 0.531 | 0.397 | 620 |
+| abs_attr_vs_abs_attr | all_segments | q2 | 0.477 | 0.133 | 0.447 | 0.171 | — | 0.598 | 0.398 | 619 |
+| abs_attr_vs_abs_attr | all_segments | q3 | 0.703 | 0.133 | 0.706 | 0.060 | — | 0.628 | 0.399 | 619 |
+| abs_attr_vs_abs_attr | all_segments | q4 | 0.848 | 0.136 | 0.819 | 0.008 | — | 0.647 | 0.407 | 619 |
+| abs_attr_vs_abs_attr | all_segments | q5 | 0.926 | 0.165 | 0.911 | 0.002 | — | 0.657 | 0.471 | 619 |
+| F_attn_mean_vs_abs_attr | all_segments | all | 0.616 | 0.140 | 0.617 | 0.104 | — | 0.566 | 0.414 | 3096 |
+| F_attn_mean_vs_abs_attr | all_segments | q1 | 0.202 | 0.132 | 0.202 | 0.277 | — | 0.515 | 0.397 | 620 |
+| F_attn_mean_vs_abs_attr | all_segments | q5 | 0.911 | 0.165 | 0.911 | 0.002 | — | 0.631 | 0.471 | 619 |
+| F_attn_max_vs_abs_attr | all_segments | all | 0.059 | 0.140 | 0.617 | 0.104 | — | 0.575 | 0.414 | 3096 |
+| F_attn_max_vs_abs_attr | all_segments | q1 | 0.069 | 0.132 | 0.202 | 0.277 | — | 0.530 | 0.397 | 620 |
+| F_attn_max_vs_abs_attr | all_segments | q5 | 0.040 | 0.165 | 0.911 | 0.002 | — | 0.626 | 0.471 | 619 |
+| F_attn_rollout_vs_abs_attr | all_segments | all | 0.005 | 0.140 | 0.617 | 0.104 | — | 0.327 | 0.414 | 3096 |
+| F_attn_rollout_vs_abs_attr | all_segments | q1 | 0.010 | 0.132 | 0.202 | 0.277 | — | 0.357 | 0.397 | 620 |
+| F_attn_rollout_vs_abs_attr | all_segments | q5 | 0.002 | 0.165 | 0.911 | 0.002 | — | 0.374 | 0.471 | 619 |
+| abs_attr_vs_abs_attr | passage_only | all | 0.585 | 0.278 | 0.000 | 0.000 | 0.481 | 0.622 | 0.569 | 2854 |
+| abs_attr_vs_abs_attr | passage_only | q1 | 0.576 | 0.272 | 0.000 | 0.000 | 0.470 | 0.610 | 0.555 | 571 |
+| abs_attr_vs_abs_attr | passage_only | q2 | 0.587 | 0.275 | 0.000 | 0.000 | 0.475 | 0.622 | 0.553 | 571 |
+| abs_attr_vs_abs_attr | passage_only | q3 | 0.560 | 0.274 | 0.000 | 0.000 | 0.480 | 0.630 | 0.560 | 570 |
+| abs_attr_vs_abs_attr | passage_only | q4 | 0.608 | 0.267 | 0.000 | 0.000 | 0.467 | 0.614 | 0.573 | 571 |
+| abs_attr_vs_abs_attr | passage_only | q5 | 0.595 | 0.301 | 0.000 | 0.000 | 0.511 | 0.639 | 0.608 | 571 |
+| F_attn_mean_vs_abs_attr | passage_only | all | 0.426 | 0.278 | 0.000 | 0.000 | 0.481 | 0.611 | 0.569 | 2854 |
+| F_attn_mean_vs_abs_attr | passage_only | q1 | 0.441 | 0.272 | 0.000 | 0.000 | 0.470 | 0.618 | 0.555 | 571 |
+| F_attn_mean_vs_abs_attr | passage_only | q5 | 0.431 | 0.301 | 0.000 | 0.000 | 0.511 | 0.638 | 0.608 | 571 |
+| F_attn_max_vs_abs_attr | passage_only | all | 0.480 | 0.278 | 0.000 | 0.000 | 0.481 | 0.622 | 0.569 | 2854 |
+| F_attn_max_vs_abs_attr | passage_only | q1 | 0.499 | 0.272 | 0.000 | 0.000 | 0.470 | 0.634 | 0.555 | 571 |
+| F_attn_max_vs_abs_attr | passage_only | q5 | 0.469 | 0.301 | 0.000 | 0.000 | 0.511 | 0.647 | 0.608 | 571 |
+| F_attn_rollout_vs_abs_attr | passage_only | all | 0.409 | 0.278 | 0.000 | 0.000 | 0.481 | 0.592 | 0.569 | 2854 |
+| F_attn_rollout_vs_abs_attr | passage_only | q1 | 0.378 | 0.272 | 0.000 | 0.000 | 0.470 | 0.557 | 0.555 | 571 |
+| F_attn_rollout_vs_abs_attr | passage_only | q5 | 0.462 | 0.301 | 0.000 | 0.000 | 0.511 | 0.642 | 0.608 | 571 |
 

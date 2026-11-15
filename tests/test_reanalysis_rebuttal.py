@@ -127,7 +127,30 @@ class TestReanalysisRebuttal(TestCase):
         self.assertEqual(overall["top3_overlap"], 1.0)
         self.assertAlmostEqual(overall["top3_chance"], 0.6)
         self.assertEqual(overall["share_target_top_question"], 1.0)
+        self.assertEqual(overall["share_target_top_system"], 0.0)
+        self.assertTrue(np.isnan(overall["top1_overlap_baseline"]))
         self.assertEqual([r["n_prompts"] for r in records[1:]], [2] * 5)
+        # A baseline peaking on the system segment never matches the target,
+        # and a model peaking there is counted in the system share.
+        system_first = pd.Series(np.tile([9.0, 1.0, 1.0, 1.0, 1.0], 10), index=index)
+        records = decisive_agreement(
+            frame.assign(ay=system_first.to_numpy()),
+            confidence,
+            np.random.default_rng(0),
+            parts=parts,
+            baseline=pd.Series(values, index=index),
+        )
+        self.assertEqual(records[0]["share_target_top_system"], 1.0)
+        self.assertEqual(records[0]["top1_overlap_baseline"], 0.0)
+        # Ties share credit: a flat baseline over 5 segments scores 1/5.
+        records = decisive_agreement(
+            frame,
+            confidence,
+            np.random.default_rng(0),
+            parts=parts,
+            baseline=pd.Series(1.0, index=index),
+        )
+        self.assertAlmostEqual(records[0]["top1_overlap_baseline"], 0.2)
 
     def test_verify_against_published_rejects_mismatch(self) -> None:
         rows = pd.DataFrame(
