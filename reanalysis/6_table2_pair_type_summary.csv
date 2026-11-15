@@ -1,0 +1,113 @@
+table2_column,metric,statistic,pair_type,n_pairs,median,min,max
+BoolQ,F_attr,pearson_r2,all,55,0.4514549693,0.03115310695,0.8264937587
+BoolQ,F_attr,pearson_r2,closed_closed,15,0.5214923417,0.4512481988,0.8264937587
+BoolQ,F_attr,pearson_r2,cross_family,42,0.4390397562,0.03115310695,0.5553422375
+BoolQ,F_attr,pearson_r2,cross_family_open_closed,27,0.3930593581,0.03115310695,0.5553422375
+BoolQ,F_attr,pearson_r2,open_closed,30,0.4038067242,0.03115310695,0.5553422375
+BoolQ,F_attr,pearson_r2,open_open,10,0.3985315588,0.08914205358,0.5613625476
+BoolQ,F_attr,pearson_r2,same_family,13,0.4888119732,0.08914205358,0.8264937587
+BoolQ,F_attr,pearson_r2,same_family_open_closed,3,0.4498399917,0.4014075364,0.4888119732
+ANLI R1,F_attr,centered_rv,all,55,0.3081011972,0.04506556404,0.7224795381
+ANLI R1,F_attr,centered_rv,closed_closed,15,0.4324715836,0.2813514534,0.7224795381
+ANLI R1,F_attr,centered_rv,cross_family,42,0.306531784,0.04506556404,0.5080786567
+ANLI R1,F_attr,centered_rv,cross_family_open_closed,27,0.2361528846,0.04506556404,0.4860009528
+ANLI R1,F_attr,centered_rv,open_closed,30,0.2389980188,0.04506556404,0.4860009528
+ANLI R1,F_attr,centered_rv,open_open,10,0.3139614146,0.05765494596,0.5194206933
+ANLI R1,F_attr,centered_rv,same_family,13,0.3709366978,0.05958463677,0.7224795381
+ANLI R1,F_attr,centered_rv,same_family_open_closed,3,0.2761146271,0.2519086961,0.3074609323
+ANLI R2,F_attr,centered_rv,all,55,0.2645655825,0.05352681884,0.713791881
+ANLI R2,F_attr,centered_rv,closed_closed,15,0.3855859664,0.2202033598,0.713791881
+ANLI R2,F_attr,centered_rv,cross_family,42,0.2471229784,0.05352681884,0.4523787665
+ANLI R2,F_attr,centered_rv,cross_family_open_closed,27,0.1889911096,0.05352681884,0.450687419
+ANLI R2,F_attr,centered_rv,open_closed,30,0.2025054296,0.05352681884,0.450687419
+ANLI R2,F_attr,centered_rv,open_open,10,0.2833559983,0.06957770567,0.4445565992
+ANLI R2,F_attr,centered_rv,same_family,13,0.3040924899,0.06957770567,0.713791881
+ANLI R2,F_attr,centered_rv,same_family_open_closed,3,0.2645655825,0.2427736004,0.3040924899
+ANLI R3,F_attr,centered_rv,all,55,0.2909885947,0.05111567795,0.7346501582
+ANLI R3,F_attr,centered_rv,closed_closed,15,0.3793993771,0.2147364596,0.7346501582
+ANLI R3,F_attr,centered_rv,cross_family,42,0.2592452408,0.05111567795,0.4762698192
+ANLI R3,F_attr,centered_rv,cross_family_open_closed,27,0.2066727346,0.05111567795,0.4762698192
+ANLI R3,F_attr,centered_rv,open_closed,30,0.2227600143,0.05111567795,0.4762698192
+ANLI R3,F_attr,centered_rv,open_open,10,0.3166040795,0.09119799884,0.5056835259
+ANLI R3,F_attr,centered_rv,same_family,13,0.3256927234,0.09473143696,0.7346501582
+ANLI R3,F_attr,centered_rv,same_family_open_closed,3,0.2909147427,0.2585923212,0.3178968798
+WinoGrande,F_attr,pearson_r2,all,55,0.1516281178,3.827119646e-06,0.7345123867
+WinoGrande,F_attr,pearson_r2,closed_closed,15,0.3532525152,0.2307580928,0.7345123867
+WinoGrande,F_attr,pearson_r2,cross_family,42,0.1668092335,3.827119646e-06,0.425403952
+WinoGrande,F_attr,pearson_r2,cross_family_open_closed,27,0.1418502221,3.827119646e-06,0.4232886398
+WinoGrande,F_attr,pearson_r2,open_closed,30,0.1278269977,3.827119646e-06,0.4232886398
+WinoGrande,F_attr,pearson_r2,open_open,10,0.01074924138,0.001158266349,0.2567346876
+WinoGrande,F_attr,pearson_r2,same_family,13,0.07694684883,0.001158266349,0.7345123867
+WinoGrande,F_attr,pearson_r2,same_family_open_closed,3,0.02480077872,0.02339805949,0.05722222947
+BoolQ word,F_attr,pearson_r2,all,55,0.168001842,0.005962369091,0.790282737
+BoolQ word,F_attr,pearson_r2,closed_closed,15,0.2153352373,0.1030102738,0.790282737
+BoolQ word,F_attr,pearson_r2,cross_family,42,0.1614675278,0.005962369091,0.4641340047
+BoolQ word,F_attr,pearson_r2,cross_family_open_closed,27,0.1276780391,0.005962369091,0.4641340047
+BoolQ word,F_attr,pearson_r2,open_closed,30,0.1299268794,0.005962369091,0.4641340047
+BoolQ word,F_attr,pearson_r2,open_open,10,0.1648112856,0.02621558602,0.2998395761
+BoolQ word,F_attr,pearson_r2,same_family,13,0.2576876745,0.02621558602,0.790282737
+BoolQ word,F_attr,pearson_r2,same_family_open_closed,3,0.2803296485,0.2576876745,0.2872848591
+RACE RV,F_attr,centered_rv,all,55,0.3339727736,0.04324724792,0.7559475378
+RACE RV,F_attr,centered_rv,closed_closed,15,0.3644740381,0.1951440179,0.7559475378
+RACE RV,F_attr,centered_rv,cross_family,42,0.3198050644,0.04324724792,0.5741429107
+RACE RV,F_attr,centered_rv,cross_family_open_closed,27,0.3081570516,0.04324724792,0.5741429107
+RACE RV,F_attr,centered_rv,open_closed,30,0.3140536043,0.04324724792,0.5741429107
+RACE RV,F_attr,centered_rv,open_open,10,0.3645873214,0.06204133478,0.5884583883
+RACE RV,F_attr,centered_rv,same_family,13,0.3942369589,0.06204133478,0.7559475378
+RACE RV,F_attr,centered_rv,same_family_open_closed,3,0.499069941,0.3145713101,0.5256853868
+BoolQ,F_pred,pearson_r2,all,55,0.7181369103,0.09713288754,0.9559479192
+BoolQ,F_pred,pearson_r2,closed_closed,15,0.8228870625,0.7330585337,0.9559479192
+BoolQ,F_pred,pearson_r2,cross_family,42,0.7256019816,0.09713288754,0.8520106337
+BoolQ,F_pred,pearson_r2,cross_family_open_closed,27,0.6560050331,0.09713288754,0.8454691854
+BoolQ,F_pred,pearson_r2,open_closed,30,0.6690543996,0.09713288754,0.8454691854
+BoolQ,F_pred,pearson_r2,open_open,10,0.6495950861,0.1741877246,0.7949885208
+BoolQ,F_pred,pearson_r2,same_family,13,0.7101020128,0.1741877246,0.9559479192
+BoolQ,F_pred,pearson_r2,same_family_open_closed,3,0.7101020128,0.6963221222,0.7103742843
+ANLI R1,F_pred,centered_rv,all,55,0.5310001109,0.02030628672,0.9101131716
+ANLI R1,F_pred,centered_rv,closed_closed,15,0.6964335055,0.628335504,0.9101131716
+ANLI R1,F_pred,centered_rv,cross_family,42,0.5339760872,0.02030628672,0.7860856585
+ANLI R1,F_pred,centered_rv,cross_family_open_closed,27,0.4445429342,0.02030628672,0.7248210575
+ANLI R1,F_pred,centered_rv,open_closed,30,0.4569715899,0.02030628672,0.7248210575
+ANLI R1,F_pred,centered_rv,open_open,10,0.4422483741,0.04076809163,0.6282216292
+ANLI R1,F_pred,centered_rv,same_family,13,0.4770219235,0.04076809163,0.9101131716
+ANLI R1,F_pred,centered_rv,same_family_open_closed,3,0.4756339265,0.466723332,0.4770219235
+ANLI R2,F_pred,centered_rv,all,55,0.4432062367,0.02167954599,0.8951246389
+ANLI R2,F_pred,centered_rv,closed_closed,15,0.6035842726,0.502898158,0.8951246389
+ANLI R2,F_pred,centered_rv,cross_family,42,0.4556714088,0.02167954599,0.7253485651
+ANLI R2,F_pred,centered_rv,cross_family_open_closed,27,0.3674859386,0.02167954599,0.6424907612
+ANLI R2,F_pred,centered_rv,open_closed,30,0.4103976295,0.02167954599,0.6424907612
+ANLI R2,F_pred,centered_rv,open_open,10,0.3557885436,0.05338737374,0.5273733482
+ANLI R2,F_pred,centered_rv,same_family,13,0.4290705969,0.05338737374,0.8951246389
+ANLI R2,F_pred,centered_rv,same_family_open_closed,3,0.4290705969,0.4208678437,0.4432062367
+ANLI R3,F_pred,centered_rv,all,55,0.5202123246,0.07821687606,0.9035772634
+ANLI R3,F_pred,centered_rv,closed_closed,15,0.6390536326,0.5615937643,0.9035772634
+ANLI R3,F_pred,centered_rv,cross_family,42,0.5299879947,0.07821687606,0.7465308334
+ANLI R3,F_pred,centered_rv,cross_family_open_closed,27,0.442738634,0.07821687606,0.6885984829
+ANLI R3,F_pred,centered_rv,open_closed,30,0.4745436015,0.07821687606,0.6885984829
+ANLI R3,F_pred,centered_rv,open_open,10,0.4353421318,0.1129914016,0.6103789159
+ANLI R3,F_pred,centered_rv,same_family,13,0.492268557,0.1129914016,0.9035772634
+ANLI R3,F_pred,centered_rv,same_family_open_closed,3,0.492268557,0.4898222069,0.5105322807
+WinoGrande,F_pred,pearson_r2,all,55,0.2236277351,0.002214143221,0.8347906851
+WinoGrande,F_pred,pearson_r2,closed_closed,15,0.5260953889,0.4398153429,0.8347906851
+WinoGrande,F_pred,pearson_r2,cross_family,42,0.2371169456,0.002214143221,0.5738972568
+WinoGrande,F_pred,pearson_r2,cross_family_open_closed,27,0.2031295485,0.002214143221,0.5370641984
+WinoGrande,F_pred,pearson_r2,open_closed,30,0.1980972356,0.002214143221,0.5370641984
+WinoGrande,F_pred,pearson_r2,open_open,10,0.05149220382,0.009128663104,0.3306757517
+WinoGrande,F_pred,pearson_r2,same_family,13,0.1502891424,0.009128663104,0.8347906851
+WinoGrande,F_pred,pearson_r2,same_family_open_closed,3,0.03855869245,0.03319054523,0.04586232085
+BoolQ word,F_pred,pearson_r2,all,55,0.7186721678,0.0969758558,0.9554460632
+BoolQ word,F_pred,pearson_r2,closed_closed,15,0.8256256033,0.7422495314,0.9554460632
+BoolQ word,F_pred,pearson_r2,cross_family,42,0.7316480404,0.0969758558,0.8597785513
+BoolQ word,F_pred,pearson_r2,cross_family_open_closed,27,0.6648382996,0.0969758558,0.8461914762
+BoolQ word,F_pred,pearson_r2,open_closed,30,0.6718156848,0.0969758558,0.8461914762
+BoolQ word,F_pred,pearson_r2,open_open,10,0.6462494373,0.1755014094,0.7945356073
+BoolQ word,F_pred,pearson_r2,same_family,13,0.7098616271,0.1755014094,0.9554460632
+BoolQ word,F_pred,pearson_r2,same_family_open_closed,3,0.7098616271,0.6973316127,0.7125476864
+RACE RV,F_pred,centered_rv,all,55,0.7911619061,0.2537775017,0.9400767062
+RACE RV,F_pred,centered_rv,closed_closed,15,0.8403068461,0.7870436105,0.9400767062
+RACE RV,F_pred,centered_rv,cross_family,42,0.7948385167,0.2537775017,0.8871724575
+RACE RV,F_pred,centered_rv,cross_family_open_closed,27,0.7514517462,0.2537775017,0.8871724575
+RACE RV,F_pred,centered_rv,open_closed,30,0.7514834642,0.2537775017,0.8871724575
+RACE RV,F_pred,centered_rv,open_open,10,0.716352725,0.2747630119,0.8583954472
+RACE RV,F_pred,centered_rv,same_family,13,0.779797698,0.2747630119,0.9400767062
+RACE RV,F_pred,centered_rv,same_family_open_closed,3,0.7518728507,0.6955612589,0.8029094551

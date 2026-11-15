@@ -1,0 +1,111 @@
+{
+  "artifact_type": "derived_table",
+  "generator": {
+    "module": "benchmark_scripts.reanalysis_rebuttal",
+    "provenance_writer_sha256": "a61dc3d512acf567d255528ad56a6a95d81d9dec9047b4d00f07589da94ba50b",
+    "source_sha256": "bbd3eda890de3fda1918d524f6c35c263f7d06974b9c03ee4f4304fc78ba82a7"
+  },
+  "inputs": {
+    "anli_rv": {
+      "path": "results/anli_rv.tsv",
+      "sha256": "2a0a1d09086bedd48ac2f8d4c88fcce269a4d29c68729e0d32862e69d3251f12",
+      "size_bytes": 83521
+    },
+    "f_table": {
+      "path": "results/f_table.tsv",
+      "sha256": "efdd64788ce3a4f7c246729087580602518333cb8992e530e03f050ed09fb5a0",
+      "size_bytes": 3240495
+    },
+    "race_rv": {
+      "path": "results/race_rv.tsv",
+      "sha256": "721095fb3b3920a868c8248b10c7d03b7430efea450414929e2c74dfb42558d4",
+      "size_bytes": 133283
+    }
+  },
+  "output": {
+    "path": "reanalysis/6_table2_pair_type.csv",
+    "sha256": "22215686e25138ff1d3bc4a91a3fec7e149913df0f1fe846929e59ecb6868277",
+    "size_bytes": 115164
+  },
+  "parameters": {
+    "api_infinity_policy": "pairwise_complete",
+    "benchmark": "boolq",
+    "cohort": [
+      "qwen2.5-0.5b-instruct",
+      "qwen2.5-3b-instruct",
+      "llama-3.1-8b-instruct",
+      "qwen2.5-7b-instruct",
+      "qwen2.5-14b-instruct",
+      "llama3.1-70b-instruct",
+      "llama3.3-70b-instruct",
+      "llama4-maverick-17b-128e-instruct",
+      "gpt-4o",
+      "gpt-4-1",
+      "gemini-2-5-flash-lite-vertex"
+    ],
+    "confidence_bins": 5,
+    "contrast": "canonical",
+    "decisive_tie_seed": 0,
+    "decisive_top_k": 3,
+    "families": {
+      "gemini-2-5-flash-lite-vertex": "gemini",
+      "gpt-4-1": "gpt",
+      "gpt-4o": "gpt",
+      "llama-3.1-8b-instruct": "llama",
+      "llama3.1-70b-instruct": "llama",
+      "llama3.3-70b-instruct": "llama",
+      "llama4-maverick-17b-128e-instruct": "llama",
+      "qwen2.5-0.5b-instruct": "qwen",
+      "qwen2.5-14b-instruct": "qwen",
+      "qwen2.5-3b-instruct": "qwen",
+      "qwen2.5-7b-instruct": "qwen"
+    },
+    "length_measure": "log whitespace word count, minimum 1",
+    "pregrouper": "sentence",
+    "statistic": "pearson_r2",
+    "within_prompt_min_segments": 3
+  },
+  "schema_version": 1,
+  "software": {
+    "numpy": "2.5.4",
+    "pandas": "2.3.3",
+    "python": "3.12.16+meta",
+    "python_implementation": "CPython",
+    "scipy": "1.18.1",
+    "tqdm": "4.70.1"
+  },
+  "supporting_sources": {
+    "benchmark_scripts/benchmark_config.py": {
+      "sha256": "143c8c79c2cf864513a4974b63eeeeccd74ac2a53b448a54f43b42daabc0bb3a",
+      "size_bytes": 10535
+    },
+    "benchmark_scripts/compute_logodds.py": {
+      "sha256": "e79fd4606ed6f749bf0f2b0f7dc0aa4845d14d3378a60c1d030ae5f2362550cc",
+      "size_bytes": 13172
+    },
+    "benchmark_scripts/consolidate_results.py": {
+      "sha256": "f9fb58ed977f9ddb103d9099bccb3dac2e6cd33a47444e5c6eb8a54bb5d117f4",
+      "size_bytes": 5700
+    },
+    "benchmark_scripts/derived_provenance.py": {
+      "sha256": "a61dc3d512acf567d255528ad56a6a95d81d9dec9047b4d00f07589da94ba50b",
+      "size_bytes": 8425
+    },
+    "benchmark_scripts/hosted_audit_receipt.py": {
+      "sha256": "08bd899c6e594e8d055cec247898361a16905a2c263f74219e2912d90852d04f",
+      "size_bytes": 28473
+    },
+    "benchmark_scripts/layerwise_fidelity.py": {
+      "sha256": "a6bcb964d20cfc9e8ecd125b1adc4db84dca7b92ea06fa60c53d510b9d6902bb",
+      "size_bytes": 36005
+    },
+    "benchmark_scripts/run_all_benchmarks.sh": {
+      "sha256": "6e5cc162cbc774fbd8cb86f39c00d4eeda694cf9185ed78b1de897399eb23e50",
+      "size_bytes": 10076
+    },
+    "surrogate/eval_constants.py": {
+      "sha256": "ae46e73d9f14224a1368a2c496ee492f1eced33c8bc7262b67f828f5d51925a6",
+      "size_bytes": 4981
+    }
+  }
+}
